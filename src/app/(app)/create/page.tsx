@@ -1,4 +1,4 @@
-tsx
+
 "use client";
 
 import { useState, type FormEvent, useEffect } from 'react';
@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Share2, Route, Info, ExternalLink, Map } from "lucide-react";
+import { Share2, Route, Info, ExternalLink, Map, Lightbulb } from "lucide-react";
 import Image from "next/image";
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
@@ -294,17 +294,19 @@ export default function CreatePage() {
               <li>Come back here and choose "Share Existing Route" to submit your link.</li>
             </ol>
             
-            <div className="bg-accent text-accent-foreground p-6 rounded-lg shadow-md border-l-4 border-accent-foreground">
-              <div className="flex items-start">
-                <Map className="h-6 w-6 text-accent-foreground mr-3 mt-1 flex-shrink-0" />
-                <div>
-                  <h4 className="font-semibold text-accent-foreground">Pro Tip: Adding Detail</h4>
-                  <p className="text-sm text-accent-foreground/90">
-                    For the best experience, make your route descriptive. Include notes about specific cultural spots, historical significance, or unique features along the way. This helps others appreciate the journey!
-                  </p>
+            <Card className="bg-primary/5 border-primary/20 shadow-sm rounded-lg">
+              <CardContent className="p-6">
+                <div className="flex items-start gap-4">
+                  <Lightbulb className="h-8 w-8 text-primary mt-1 flex-shrink-0" />
+                  <div>
+                    <h4 className="font-semibold text-primary text-lg">Pro Tip: Adding Detail</h4>
+                    <p className="text-sm text-foreground/80 mt-1">
+                      For the best experience, make your route descriptive. Include notes about specific cultural spots, historical significance, or unique features along the way. This helps others appreciate the journey!
+                    </p>
+                  </div>
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
 
             <p className="text-muted-foreground pt-4">
               Alternatively, you can describe your route below. Providing a Google Maps link is preferred for accuracy if possible.
