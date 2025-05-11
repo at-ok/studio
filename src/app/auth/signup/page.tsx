@@ -65,7 +65,7 @@ export default function SignUpPage() {
         title: "Account Created!",
         description: "Welcome to Culture Compass!",
       });
-      router.push('/discover'); // Or a profile completion page if needed for cultural info specifically
+      router.push('/my-page'); 
     } catch (error: any) {
       console.error("Sign Up Error:", error);
       toast({
@@ -88,7 +88,6 @@ export default function SignUpPage() {
       // Check if user data already exists in Firestore (e.g. for existing users)
       // For a new user via Google, you might want to collect cultural info here or redirect
       // For simplicity, we'll just create/update their user doc.
-      // A more robust solution would check if the document exists before setting.
       // `getAdditionalUserInfo(result).isNewUser` can be used.
       await setDoc(doc(db, "users", user.uid), {
         uid: user.uid,
@@ -105,7 +104,7 @@ export default function SignUpPage() {
         title: "Signed in with Google!",
         description: `Welcome, ${user.displayName || 'User'}!`,
       });
-      router.push('/discover');
+      router.push('/my-page');
     } catch (error: any)      {
       console.error("Google Sign-Up Error:", error);
       let errorMessage = "An unexpected error occurred.";

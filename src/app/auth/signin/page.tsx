@@ -72,7 +72,7 @@ export default function SignInPage() {
         title: "Signed In Successfully!",
         description: `Welcome back, ${user.displayName || 'User'}!`,
       });
-      router.push('/discover');
+      router.push('/my-page');
     } catch (error: any) {
       console.error("Google Sign-In Error:", error);
       let errorMessage = "An unexpected error occurred during Google Sign-In.";
