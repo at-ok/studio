@@ -1,4 +1,4 @@
-// use server'
+'use server';
 
 /**
  * @fileOverview Provides comment suggestions based on community feedback for a given route.
