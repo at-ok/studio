@@ -82,12 +82,22 @@ export default {
   				to: {
   					height: '0'
   				}
-  			}
+  			},
+        'spin-slow': {
+          '0%, 100%': { transform: 'rotate(0deg)' },
+          '25%': { transform: 'rotate(5deg)' },
+          '75%': {transform: 'rotate(-5deg)'},
+        }
   		},
   		animation: {
   			'accordion-down': 'accordion-down 0.2s ease-out',
-  			'accordion-up': 'accordion-up 0.2s ease-out'
-  		}
+  			'accordion-up': 'accordion-up 0.2s ease-out',
+        'spin-slow': 'spin-slow 4s ease-in-out infinite'
+  		},
+      fontFamily: {
+        sans: ['var(--font-geist-sans)'],
+        mono: ['var(--font-geist-mono)'],
+      },
   	}
   },
   plugins: [require("tailwindcss-animate")],

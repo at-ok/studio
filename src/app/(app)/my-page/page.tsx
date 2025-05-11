@@ -1,0 +1,164 @@
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { ListChecks, Route, MessageSquare, Star, Award, Edit3, Gift, Settings } from "lucide-react";
+import Link from "next/link";
+import Image from "next/image";
+
+// Mock data for My Page
+const mockUser = {
+  name: "Alex Wanderer",
+  email: "alex.wanderer@example.com",
+  avatarUrl: "https://picsum.photos/seed/user_alex/200/200",
+  avatarHint: "user avatar",
+  joinDate: "Joined March 2023",
+  isCulturalUser: true,
+  culturalInterest: "Traditional Pottery & Local Crafts",
+};
+
+const mockSharedRoutes = [
+  { id: "sr1", title: "Hidden Gems of Kyoto", status: "Published", views: 1250, rating: 4.7, imageUrl: "https://picsum.photos/seed/kyoto_shared/300/200", imageHint: "Kyoto street" },
+  { id: "sr2", title: "Artisan Trail: Downtown", status: "Draft", views: 0, rating: null, imageUrl: "https://picsum.photos/seed/artisan_shared/300/200", imageHint: "artisan shop" },
+];
+
+const mockTraveledRoutes = [
+  { id: "tr1", title: "Ancient Temple Trail", completedDate: "2024-05-10", myRating: 5, imageUrl: "https://picsum.photos/seed/temple_traveled/300/200", imageHint: "temple detail" },
+  { id: "tr2", title: "Urban Art Walk", completedDate: "2024-04-22", myRating: 4, imageUrl: "https://picsum.photos/seed/art_traveled/300/200", imageHint: "graffiti wall" },
+];
+
+const mockRewards = [
+  { id: "rw1", title: "10% Off at 'Clay Stories' Pottery", description: "Redeem for a discount on your next pottery purchase.", culturalProvider: "Clay Stories Studio", expiry: "2024-12-31", isCulturalReward: true, imageUrl: "https://picsum.photos/seed/pottery_reward/300/200", imageHint: "pottery items" },
+];
+
+
+export default function MyPage() {
+  return (
+    <div className="space-y-8">
+      <Card className="overflow-hidden rounded-xl shadow-lg">
+        <CardHeader className="bg-muted/30 p-6 flex flex-col md:flex-row items-start md:items-center gap-6">
+          <Avatar className="h-24 w-24 border-4 border-primary shadow-md">
+            <AvatarImage src={mockUser.avatarUrl} alt={mockUser.name} data-ai-hint={mockUser.avatarHint} />
+            <AvatarFallback className="text-3xl">{mockUser.name.charAt(0)}</AvatarFallback>
+          </Avatar>
+          <div className="flex-grow">
+            <CardTitle className="text-3xl font-bold text-foreground">{mockUser.name}</CardTitle>
+            <CardDescription className="text-muted-foreground mt-1">{mockUser.email}</CardDescription>
+            <p className="text-sm text-muted-foreground mt-0.5">{mockUser.joinDate}</p>
+            {mockUser.isCulturalUser && (
+              <p className="text-sm text-primary font-medium mt-1 flex items-center gap-1.5">
+                <Award className="h-4 w-4" /> Cultural Contributor: {mockUser.culturalInterest}
+              </p>
+            )}
+          </div>
+          <Button variant="outline" size="sm" asChild className="border-primary text-primary hover:bg-primary/10">
+            <Link href="/my-page/settings"><Settings className="h-4 w-4 mr-2"/>Edit Profile</Link>
+          </Button>
+        </CardHeader>
+      </Card>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Shared Routes Section */}
+        <Card className="lg:col-span-2 rounded-xl shadow-md">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-xl"><Route className="h-6 w-6 text-primary" />My Shared Routes</CardTitle>
+            <CardDescription>Manage routes you've created and shared with the community.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {mockSharedRoutes.length > 0 ? mockSharedRoutes.map(route => (
+              <div key={route.id} className="flex items-center gap-4 p-3 border border-border rounded-lg hover:bg-muted/20 transition-colors">
+                <Image src={route.imageUrl} alt={route.title} width={100} height={66} className="rounded-md object-cover" data-ai-hint={route.imageHint} />
+                <div className="flex-grow">
+                  <h3 className="font-semibold text-foreground">{route.title}</h3>
+                  <p className={`text-xs ${route.status === 'Published' ? 'text-green-600' : 'text-amber-600'}`}>{route.status}</p>
+                  <p className="text-xs text-muted-foreground">{route.views} views {route.rating && `• ${route.rating} ★`}</p>
+                </div>
+                <Button variant="ghost" size="icon" asChild><Link href={`/route/${route.id}/edit`}><Edit3 className="h-5 w-5 text-muted-foreground hover:text-primary" /></Link></Button>
+              </div>
+            )) : (
+              <p className="text-muted-foreground text-sm">You haven't shared any routes yet. <Link href="/create" className="text-primary hover:underline font-medium">Share your first route!</Link></p>
+            )}
+             <Button variant="outline" asChild className="mt-4 border-primary text-primary hover:bg-primary/10 w-full sm:w-auto">
+                <Link href="/create"><Route className="h-4 w-4 mr-2"/>Share a New Route</Link>
+             </Button>
+          </CardContent>
+        </Card>
+
+        {/* Cultural Rewards Section (if applicable) */}
+        {mockUser.isCulturalUser && mockRewards.length > 0 && (
+          <Card className="rounded-xl shadow-md">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-xl"><Gift className="h-6 w-6 text-accent" />My Cultural Rewards</CardTitle>
+              <CardDescription>Coupons and services you can offer for your cultural routes.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {mockRewards.map(reward => (
+                <div key={reward.id} className="p-3 border border-border rounded-lg bg-background hover:shadow-sm transition-shadow">
+                  <Image src={reward.imageUrl} alt={reward.title} width={300} height={150} className="rounded-md object-cover w-full h-24 mb-2" data-ai-hint={reward.imageHint} />
+                  <h3 className="font-semibold text-foreground text-sm">{reward.title}</h3>
+                  <p className="text-xs text-muted-foreground">Provider: {reward.culturalProvider}</p>
+                  <p className="text-xs text-muted-foreground">Expires: {reward.expiry}</p>
+                  <Button variant="link" size="sm" className="p-0 h-auto text-accent hover:text-accent/80 mt-1">Manage Reward</Button>
+                </div>
+              ))}
+               <Button variant="outline" className="mt-2 w-full border-accent text-accent hover:bg-accent/10">
+                <Gift className="h-4 w-4 mr-2"/>Add New Reward
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+
+      {/* Traveled Routes & Activity Section */}
+      <Card className="rounded-xl shadow-md">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-xl"><ListChecks className="h-6 w-6 text-primary" />My Activity</CardTitle>
+          <CardDescription>A log of routes you've traveled and your contributions.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <h3 className="text-lg font-semibold text-foreground mb-3">Traveled Routes</h3>
+          <div className="space-y-4 mb-6">
+            {mockTraveledRoutes.length > 0 ? mockTraveledRoutes.map(route => (
+               <div key={route.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-3 border border-border rounded-lg hover:bg-muted/20 transition-colors">
+                <Image src={route.imageUrl} alt={route.title} width={120} height={80} className="rounded-md object-cover" data-ai-hint={route.imageHint} />
+                <div className="flex-grow">
+                  <Link href={`/route/${route.id}`} className="font-semibold text-foreground hover:text-primary hover:underline">{route.title}</Link>
+                  <p className="text-xs text-muted-foreground">Completed: {route.completedDate}</p>
+                  <div className="flex items-center mt-1">
+                    <span className="text-xs text-muted-foreground mr-1">Your rating:</span>
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} className={`h-4 w-4 ${i < (route.myRating || 0) ? 'text-accent fill-accent' : 'text-muted-foreground/50'}`} />
+                    ))}
+                  </div>
+                </div>
+                <Button variant="outline" size="sm" asChild className="mt-2 sm:mt-0">
+                  <Link href={`/route/${route.id}#feedback`}>
+                    <MessageSquare className="h-4 w-4 mr-2" /> View/Edit Feedback
+                  </Link>
+                </Button>
+              </div>
+            )) : (
+               <p className="text-muted-foreground text-sm">You haven't marked any routes as traveled yet. <Link href="/discover" className="text-primary hover:underline font-medium">Start exploring!</Link></p>
+            )}
+          </div>
+          
+          {/* Placeholder for comments and ratings */}
+          <h3 className="text-lg font-semibold text-foreground mb-3 mt-6 border-t pt-6">My Comments & Ratings</h3>
+          <p className="text-muted-foreground text-sm">
+            This section will show your specific comments and ratings across various routes.
+          </p>
+          {/* Example item */}
+          <div className="mt-4 p-3 border border-border rounded-lg bg-background">
+            <p className="text-sm text-foreground">On <Link href="/route/tr1" className="font-medium text-primary hover:underline">Ancient Temple Trail</Link>:</p>
+            <div className="flex items-center my-1">
+                {[...Array(5)].map((_, i) => (
+                  <Star key={i} className={`h-4 w-4 ${i < 5 ? 'text-accent fill-accent' : 'text-muted-foreground/50'}`} />
+                ))}
+            </div>
+            <p className="text-sm italic text-muted-foreground">"Absolutely breathtaking views and so much history. A must-do!" - 2 weeks ago</p>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
