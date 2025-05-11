@@ -1,3 +1,4 @@
+tsx
 "use client";
 
 import { useState, type FormEvent, useEffect } from 'react';
@@ -293,12 +294,12 @@ export default function CreatePage() {
               <li>Come back here and choose "Share Existing Route" to submit your link.</li>
             </ol>
             
-            <div className="border-l-4 border-accent bg-accent/10 p-4 rounded-md">
+            <div className="bg-accent text-accent-foreground p-6 rounded-lg shadow-md border-l-4 border-accent-foreground">
               <div className="flex items-start">
-                <Map className="h-6 w-6 text-accent mr-3 mt-1" />
+                <Map className="h-6 w-6 text-accent-foreground mr-3 mt-1 flex-shrink-0" />
                 <div>
                   <h4 className="font-semibold text-accent-foreground">Pro Tip: Adding Detail</h4>
-                  <p className="text-sm text-accent-foreground/80">
+                  <p className="text-sm text-accent-foreground/90">
                     For the best experience, make your route descriptive. Include notes about specific cultural spots, historical significance, or unique features along the way. This helps others appreciate the journey!
                   </p>
                 </div>
