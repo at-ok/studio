@@ -17,7 +17,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
+  // AlertDialogTrigger, // No longer needed here for the main delete dialog trigger
 } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
 import { getAuth, onAuthStateChanged, type User } from "firebase/auth";
@@ -70,8 +70,8 @@ export default function MyPage() {
             avatarUrl: currentUser.photoURL || `https://picsum.photos/seed/${currentUser.uid}/200/200`,
             avatarHint: "user avatar",
             joinDate: `Joined ${currentUser.metadata.creationTime ? new Date(currentUser.metadata.creationTime).toLocaleDateString() : 'recently'}`,
+            isNewUser: currentUser.metadata.creationTime === currentUser.metadata.lastSignInTime, // Basic check for new user
         });
-        // fetchSharedRoutes will be called by the useEffect below that depends on `user`
       } else {
         setUser(null);
         setFirebaseUser(null);
@@ -112,7 +112,7 @@ export default function MyPage() {
   };
 
   useEffect(() => {
-    if (user && firebaseUser) { // Ensure firebaseUser is also set before fetching
+    if (user && firebaseUser) { 
         fetchSharedRoutes();
     } else if (!user) { 
         setUserSharedRoutes([]);
@@ -230,21 +230,31 @@ export default function MyPage() {
                         <Edit3 className="h-5 w-5 text-muted-foreground hover:text-primary" />
                     </Link>
                   </Button>
-                  <AlertDialogTrigger asChild>
-                     <Button variant="ghost" size="icon" onClick={() => setRouteToDelete(route)} aria-label={`Delete ${route.title}`}>
-                        <Trash2 className="h-5 w-5 text-muted-foreground hover:text-destructive" />
-                    </Button>
-                  </AlertDialogTrigger>
+                  
+                  <Button variant="ghost" size="icon" onClick={() => setRouteToDelete(route)} aria-label={`Delete ${route.title}`}>
+                      <Trash2 className="h-5 w-5 text-muted-foreground hover:text-destructive" />
+                  </Button>
                 </div>
               </div>
             )) : (
-              <div className="text-center py-4">
-                <p className="text-muted-foreground text-sm mb-4">Ready to share your cultural discoveries or favorite local paths? Create your first route and inspire others!</p>
+               <div className="text-center py-6 px-4 border-2 border-dashed border-border rounded-lg bg-muted/20">
+                <Compass className="h-12 w-12 text-primary mx-auto mb-3" />
+                <h3 className="text-lg font-semibold text-foreground mb-1">No Routes Shared Yet</h3>
+                <p className="text-muted-foreground text-sm mb-4">
+                  Ready to share your cultural discoveries or favorite local paths? Create your first route and inspire others!
+                </p>
+                <Button asChild className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                  <Link href="/create">
+                    <Route className="h-4 w-4 mr-2" /> Create New Route
+                  </Link>
+                </Button>
               </div>
             )}
-             <Button variant="outline" asChild className="mt-4 border-primary text-primary hover:bg-primary/10 w-full sm:w-auto">
-                <Link href="/create"><Route className="h-4 w-4 mr-2"/>Share or Create a New Route</Link>
-             </Button>
+             {userSharedRoutes.length > 0 && (
+                <Button variant="outline" asChild className="mt-4 border-primary text-primary hover:bg-primary/10 w-full sm:w-auto">
+                    <Link href="/create"><Route className="h-4 w-4 mr-2"/>Share or Create More Routes</Link>
+                </Button>
+             )}
           </CardContent>
         </Card>
 
@@ -300,8 +310,10 @@ export default function MyPage() {
                 </Button>
               </div>
             )) : (
-              <div className="text-center py-4">
-                <p className="text-muted-foreground text-sm mb-4">No adventures logged yet! Explore captivating routes, mark them as 'traveled', and build your personal journey log.</p>
+              <div className="text-center py-6 px-4 border-2 border-dashed border-border rounded-lg bg-muted/20">
+                <ListChecks className="h-12 w-12 text-primary mx-auto mb-3" />
+                <h3 className="text-lg font-semibold text-foreground mb-1">No Adventures Logged Yet</h3>
+                <p className="text-muted-foreground text-sm mb-4">Explore captivating routes, mark them as 'traveled', and build your personal journey log.</p>
                 <Button asChild variant="default" className="bg-primary hover:bg-primary/90 text-primary-foreground">
                     <Link href="/discover">
                         <Compass className="h-4 w-4 mr-2" />
@@ -313,18 +325,36 @@ export default function MyPage() {
           </div>
           
           <h3 className="text-lg font-semibold text-foreground mb-3 mt-6 border-t pt-6">My Comments & Ratings</h3>
-          <p className="text-muted-foreground text-sm">
-            This section will show your specific comments and ratings across various routes.
-          </p>
-          <div className="mt-4 p-3 border border-border rounded-lg bg-background">
-            <p className="text-sm text-foreground">On <Link href="/route/mock-1" className="font-medium text-primary hover:underline">Ancient Temple Trail</Link>:</p>
-            <div className="flex items-center my-1">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className={`h-4 w-4 ${i < 5 ? 'text-accent fill-accent' : 'text-muted-foreground/50'}`} />
-                ))}
+          { (firebaseUser?.isNewUser || (!firebaseUser?.isNewUser && mockTraveledRoutes.length === 0 )) && currentCommentsCount === 0 ? (
+             <div className="text-center py-6 px-4 border-2 border-dashed border-border rounded-lg bg-muted/20 mt-4">
+                <MessageSquare className="h-12 w-12 text-primary mx-auto mb-3" />
+                <h3 className="text-lg font-semibold text-foreground mb-1">Share Your Thoughts!</h3>
+                <p className="text-muted-foreground text-sm mb-4">
+                    After you travel a route, come back to its page to leave comments and ratings. Your feedback helps the community!
+                </p>
+                 <Button asChild variant="default" className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                    <Link href="/discover">
+                        <Compass className="h-4 w-4 mr-2" />
+                        Find a Route to Review
+                    </Link>
+                </Button>
             </div>
-            <p className="text-sm italic text-muted-foreground">"Absolutely breathtaking views and so much history. A must-do!" - 2 weeks ago</p>
-          </div>
+          ) : (
+            <>
+              <p className="text-muted-foreground text-sm">
+                This section will show your specific comments and ratings across various routes.
+              </p>
+              <div className="mt-4 p-3 border border-border rounded-lg bg-background">
+                <p className="text-sm text-foreground">On <Link href="/route/mock-1" className="font-medium text-primary hover:underline">Ancient Temple Trail</Link>:</p>
+                <div className="flex items-center my-1">
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} className={`h-4 w-4 ${i < 5 ? 'text-accent fill-accent' : 'text-muted-foreground/50'}`} />
+                    ))}
+                </div>
+                <p className="text-sm italic text-muted-foreground">"Absolutely breathtaking views and so much history. A must-do!" - 2 weeks ago</p>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -351,5 +381,7 @@ export default function MyPage() {
   );
 }
 
-
+// Placeholder for comment count, replace with actual logic if available
+const currentCommentsCount = 1; 
     
+
