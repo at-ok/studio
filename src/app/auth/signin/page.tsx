@@ -6,13 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { LogIn, Mail, KeyRound } from "lucide-react";
+import { LogIn, Mail, KeyRound, AlertTriangle } from "lucide-react";
 import { Logo } from "@/components/common/logo";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 import { getAuth, GoogleAuthProvider, signInWithPopup, getAdditionalUserInfo, signInWithEmailAndPassword } from "firebase/auth";
 import { getFirestore, doc, setDoc, getDoc }  from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
 // import { app as firebaseApp } from '@/lib/firebase'; // Not strictly needed if using getAuth() without args and firebase is initialized
 
 // Google Icon SVG as a component
@@ -29,9 +31,11 @@ const GoogleIcon = () => (
 export default function SignInPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const [signInError, setSignInError] = useState<string | null>(null);
 
   const handleSignIn = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setSignInError(null); // Clear previous errors
     const formData = new FormData(event.currentTarget);
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
@@ -58,6 +62,7 @@ export default function SignInPage() {
       let errorMessage = "An unexpected error occurred during sign-in.";
       switch (error.code) {
         case 'auth/user-not-found':
+        case 'auth/invalid-credential': // More generic error for wrong email/password in newer Firebase SDK versions
         case 'auth/wrong-password':
           errorMessage = "Invalid email or password. Please try again.";
           break;
@@ -67,9 +72,13 @@ export default function SignInPage() {
         case 'auth/user-disabled':
           errorMessage = "This account has been disabled.";
           break;
+        case 'auth/too-many-requests':
+          errorMessage = "Too many attempts. Please try again later.";
+          break;
         default:
           errorMessage = error.message || errorMessage;
       }
+      setSignInError(errorMessage);
       toast({
         variant: "destructive",
         title: "Sign In Failed",
@@ -79,6 +88,7 @@ export default function SignInPage() {
   };
 
   const handleGoogleSignIn = async () => {
+    setSignInError(null); // Clear previous errors
     const auth = getAuth();
     const provider = new GoogleAuthProvider();
     const db = getFirestore();
@@ -125,6 +135,7 @@ export default function SignInPage() {
       else {
         errorMessage = error.message || errorMessage;
       }
+      setSignInError(errorMessage);
       toast({
         variant: "destructive",
         title: "Google Sign-In Failed",
@@ -144,6 +155,13 @@ export default function SignInPage() {
           <CardDescription className="text-muted-foreground">Sign in to continue your cultural journey.</CardDescription>
         </CardHeader>
         <CardContent className="p-6 md:p-8 space-y-6">
+          {signInError && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Sign In Error</AlertTitle>
+              <AlertDescription>{signInError}</AlertDescription>
+            </Alert>
+          )}
           <form onSubmit={handleSignIn} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
