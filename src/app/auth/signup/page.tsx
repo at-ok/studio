@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from "react";
@@ -7,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { UserPlus, Mail, KeyRound, Users, ShieldQuestion } from "lucide-react";
+import { UserPlus, Mail, KeyRound, ShieldQuestion } from "lucide-react";
 import { Logo } from "@/components/common/logo";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -30,8 +31,10 @@ export default function SignUpPage() {
     // TODO: Implement Firebase email/password sign up
     const formData = new FormData(event.currentTarget);
     const data = Object.fromEntries(formData.entries());
-    console.log({ ...data, isCulturalUser, culturalInterest });
-    alert("Sign up functionality to be implemented.");
+    const fullData = { ...data, isCulturalUser, culturalInterest: isCulturalUser ? culturalInterest : "" };
+    console.log("Sign Up Data:", fullData);
+    // In a real app, this data would be sent to Firebase Authentication and Firestore
+    alert("Sign up functionality to be implemented. Check console for data.");
   };
 
   const handleGoogleSignUp = () => {
@@ -73,44 +76,51 @@ export default function SignUpPage() {
               </div>
             </div>
             
-            <div className="space-y-3 pt-2 border-t border-border">
-              <div className="flex items-start space-x-3 mt-3">
-                <Checkbox 
-                  id="isCulturalUser" 
-                  checked={isCulturalUser}
-                  onCheckedChange={(checked) => setIsCulturalUser(Boolean(checked))}
-                  className="mt-1"
-                />
-                <div className="grid gap-1.5 leading-none">
-                  <Label
-                    htmlFor="isCulturalUser"
-                    className="text-sm font-medium text-foreground peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                  >
-                    I am a "Cultural Sphere User"
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    Select this if you represent or wish to promote specific traditional/cultural aspects through routes.
-                  </p>
+            <div className="space-y-3 pt-3 border-t border-border">
+              <div className="flex items-start space-x-3 mt-3 p-3 rounded-md border border-input bg-card">
+                <ShieldQuestion className="h-6 w-6 text-primary flex-shrink-0 mt-1" />
+                <div className="flex-grow space-y-2">
+                    <div className="flex items-start space-x-3">
+                         <Checkbox 
+                            id="isCulturalUser" 
+                            checked={isCulturalUser}
+                            onCheckedChange={(checked) => setIsCulturalUser(Boolean(checked))}
+                            className="mt-1"
+                            aria-labelledby="culturalUserLabel"
+                        />
+                        <div className="grid gap-1.5 leading-none">
+                        <Label
+                            htmlFor="isCulturalUser"
+                            id="culturalUserLabel"
+                            className="text-sm font-medium text-foreground peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                        >
+                            I am a "Cultural Sphere User"
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                            Select this if you represent or wish to promote specific traditional/cultural aspects through routes.
+                        </p>
+                        </div>
+                    </div>
+
+                    {isCulturalUser && (
+                        <div className="space-y-2 pt-2">
+                        <Label htmlFor="culturalInterest" className="text-sm font-medium">Describe your Cultural Focus</Label>
+                        <Textarea
+                            id="culturalInterest"
+                            name="culturalInterest"
+                            value={culturalInterest}
+                            onChange={(e) => setCulturalInterest(e.target.value)}
+                            placeholder="e.g., Local folk music, traditional textile arts, historical landmarks of the Edo period, etc."
+                            rows={2}
+                            className="text-sm"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                            This helps us understand your area of expertise or interest. This information may be displayed with routes you create.
+                        </p>
+                        </div>
+                    )}
                 </div>
               </div>
-
-              {isCulturalUser && (
-                <div className="space-y-2 pl-8">
-                  <Label htmlFor="culturalInterest">Describe your Cultural Focus</Label>
-                  <Textarea
-                    id="culturalInterest"
-                    name="culturalInterest"
-                    value={culturalInterest}
-                    onChange={(e) => setCulturalInterest(e.target.value)}
-                    placeholder="e.g., Local folk music, traditional textile arts, historical landmarks of the Edo period, etc."
-                    rows={2}
-                    className="text-sm"
-                  />
-                   <p className="text-xs text-muted-foreground">
-                    This helps us understand your area of expertise or interest.
-                  </p>
-                </div>
-              )}
             </div>
 
             <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground text-base py-3 flex items-center gap-2">
@@ -145,3 +155,4 @@ export default function SignUpPage() {
     </div>
   );
 }
+
