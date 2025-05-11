@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Badge } from "@/components/ui/badge";
 import { Search, MapPin, Star, Clock, Users } from "lucide-react";
 import Image from "next/image";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // Mock data for routes
 const mockRoutes = [
@@ -20,6 +21,7 @@ const mockRoutes = [
     creator: "Culture Enthusiast",
     isCulturalRoute: true,
     startPoint: "Central Park",
+    mapPosition: { top: '25%', left: '30%' },
   },
   {
     id: "2",
@@ -34,6 +36,7 @@ const mockRoutes = [
     creator: "City Explorer",
     isCulturalRoute: false,
     startPoint: "Downtown Plaza",
+    mapPosition: { top: '60%', left: '65%' },
   },
   {
     id: "3",
@@ -48,6 +51,7 @@ const mockRoutes = [
     creator: "Local Historian",
     isCulturalRoute: true,
     startPoint: "Old Harbor",
+    mapPosition: { top: '45%', left: '15%' },
   },
 ];
 
@@ -64,8 +68,46 @@ export default function DiscoverPage() {
         <Input type="search" placeholder="Search routes by name, location, or tags..." className="w-full pl-10 pr-4 py-3 rounded-lg shadow-sm border-border focus-visible:ring-primary" />
       </div>
 
-      {/* TODO: Add filters for "Highly Unique Routes" and "Nearby Routes" */}
-      {/* For now, just listing all mock routes */}
+      <section>
+        <h2 className="text-2xl font-semibold tracking-tight text-foreground mb-4">Route Starting Points</h2>
+        <Card className="rounded-xl shadow-lg overflow-hidden">
+          <CardContent className="p-0">
+            <div className="relative w-full aspect-[16/9] md:aspect-[2.5/1] bg-muted">
+              <Image
+                src="https://picsum.photos/seed/routemap/1200/480"
+                alt="Map of nearby routes"
+                layout="fill"
+                objectFit="cover"
+                data-ai-hint="abstract map"
+                className="opacity-70"
+              />
+              <TooltipProvider>
+                {mockRoutes.map(route => route.mapPosition && (
+                  <Tooltip key={`map-pin-${route.id}`} delayDuration={100}>
+                    <TooltipTrigger asChild>
+                      <div
+                        className="absolute p-1 bg-primary rounded-full shadow-md cursor-pointer hover:scale-110 transition-transform flex items-center justify-center"
+                        style={{ 
+                          top: route.mapPosition.top, 
+                          left: route.mapPosition.left, 
+                          transform: 'translate(-50%, -50%)' 
+                        }}
+                        aria-label={`Location pin for ${route.title}`}
+                      >
+                        <MapPin className="h-6 w-6 text-primary-foreground" />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent className="bg-background border-border shadow-xl rounded-md">
+                      <p className="font-semibold text-foreground">{route.title}</p>
+                      <p className="text-sm text-muted-foreground">Starts at: {route.startPoint}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                ))}
+              </TooltipProvider>
+            </div>
+          </CardContent>
+        </Card>
+      </section>
       
       <section>
         <h2 className="text-2xl font-semibold tracking-tight text-foreground mb-4">Popular Routes</h2>
