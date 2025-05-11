@@ -5,9 +5,21 @@ import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ListChecks, Route, MessageSquare, Star, Award, Edit3, Gift, Settings, Loader2, ExternalLink } from "lucide-react";
+import { ListChecks, Route, MessageSquare, Star, Award, Edit3, Gift, Settings, Loader2, Trash2 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { useToast } from '@/hooks/use-toast';
 
 // Consistent Route structure
 interface MySharedRoute {
@@ -48,17 +60,18 @@ const mockRewards = [
 export default function MyPage() {
   const [userSharedRoutes, setUserSharedRoutes] = useState<MySharedRoute[]>([]);
   const [isLoadingSharedRoutes, setIsLoadingSharedRoutes] = useState(true);
+  const [routeToDelete, setRouteToDelete] = useState<MySharedRoute | null>(null);
+  const { toast } = useToast();
 
-  useEffect(() => {
+  const fetchSharedRoutes = () => {
     if (typeof window !== 'undefined') {
       const storedRoutesRaw = localStorage.getItem(SHARED_ROUTES_LS_KEY);
-      // Ensure storedRoutes are parsed as an array of MySharedRoute compatible objects
       const storedRoutes: Partial<MySharedRoute>[] = storedRoutesRaw ? JSON.parse(storedRoutesRaw) : [];
       
       const mappedRoutes = storedRoutes.map(route => ({
-        id: route.id || `fallback_id_${Math.random()}`, // provide fallback id
-        title: route.title || "Untitled Route", // provide fallback title
-        imageUrl: route.imageUrl || "https://picsum.photos/seed/default/100/66", // provide fallback image
+        id: route.id || `fallback_id_${Math.random()}`,
+        title: route.title || "Untitled Route",
+        imageUrl: route.imageUrl || "https://picsum.photos/seed/default/100/66",
         imageHint: route.imageHint || "route image",
         googleMapsLink: route.googleMapsLink,
         status: "Shared (Local)" as "Shared (Local)", 
@@ -67,18 +80,48 @@ export default function MyPage() {
         description: route.description || "",
       }));
 
-      // Sort routes by creation date (newest first)
-      // Assumes ID format like 'user_shared_TIMESTAMP' or 'user_created_TIMESTAMP'
       mappedRoutes.sort((a, b) => {
         const timestampA = parseInt(a.id.split('_').pop() || '0', 10);
         const timestampB = parseInt(b.id.split('_').pop() || '0', 10);
-        return timestampB - timestampA; // Sort in descending order
+        return timestampB - timestampA;
       });
       
       setUserSharedRoutes(mappedRoutes);
     }
     setIsLoadingSharedRoutes(false);
+  };
+
+  useEffect(() => {
+    fetchSharedRoutes();
   }, []);
+
+  const handleDeleteSharedRoute = (routeId: string) => {
+    if (typeof window !== 'undefined') {
+      try {
+        const existingRoutesRaw = localStorage.getItem(SHARED_ROUTES_LS_KEY);
+        let existingRoutes: MySharedRoute[] = existingRoutesRaw ? JSON.parse(existingRoutesRaw) : [];
+        existingRoutes = existingRoutes.filter(route => route.id !== routeId);
+        localStorage.setItem(SHARED_ROUTES_LS_KEY, JSON.stringify(existingRoutes));
+        
+        // Update state to reflect deletion
+        setUserSharedRoutes(prevRoutes => prevRoutes.filter(route => route.id !== routeId));
+        
+        toast({
+          title: "Route Deleted",
+          description: "The shared route has been successfully deleted.",
+        });
+      } catch (error) {
+        console.error("Error deleting route from localStorage:", error);
+        toast({
+          variant: "destructive",
+          title: "Deletion Error",
+          description: "Could not delete the route. Please try again.",
+        });
+      }
+    }
+    setRouteToDelete(null); // Close dialog
+  };
+
 
   const RouteItemContent = ({ route }: { route: MySharedRoute }) => (
     <>
@@ -123,7 +166,7 @@ export default function MyPage() {
         <Card className="lg:col-span-2 rounded-xl shadow-md">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-xl"><Route className="h-6 w-6 text-primary" />My Shared Routes</CardTitle>
-            <CardDescription>Manage routes you've created and shared. Click a route to view its details and map.</CardDescription>
+            <CardDescription>Manage routes you've created and shared. Click a route to view its details or map.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {isLoadingSharedRoutes ? (
@@ -143,12 +186,18 @@ export default function MyPage() {
                     </a>
                   </Link>
                 )}
-                <Button variant="ghost" size="icon" asChild TooltipContent="Edit route details">
-                  {/* This could also link to a specific edit page e.g. /create/${route.id}/edit or similar */}
-                  <Link href={`/route/${route.id}`} aria-label={`Edit details for ${route.title}`}> 
-                      <Edit3 className="h-5 w-5 text-muted-foreground hover:text-primary" />
-                  </Link>
-                </Button>
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="icon" asChild>
+                    <Link href={`/route/${route.id}`} aria-label={`Edit details for ${route.title}`}> 
+                        <Edit3 className="h-5 w-5 text-muted-foreground hover:text-primary" />
+                    </Link>
+                  </Button>
+                  <AlertDialogTrigger asChild>
+                     <Button variant="ghost" size="icon" onClick={() => setRouteToDelete(route)} aria-label={`Delete ${route.title}`}>
+                        <Trash2 className="h-5 w-5 text-muted-foreground hover:text-destructive" />
+                    </Button>
+                  </AlertDialogTrigger>
+                </div>
               </div>
             )) : (
               <p className="text-muted-foreground text-sm">You haven't shared any routes yet. <Link href="/create" className="text-primary hover:underline font-medium">Share your first route!</Link></p>
@@ -235,6 +284,27 @@ export default function MyPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Alert Dialog for Delete Confirmation */}
+      <AlertDialog open={!!routeToDelete} onOpenChange={(open) => !open && setRouteToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to delete this route?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the route titled "{routeToDelete?.title}" from your shared routes.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setRouteToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => routeToDelete && handleDeleteSharedRoute(routeToDelete.id)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
