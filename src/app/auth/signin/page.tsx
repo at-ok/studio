@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -7,7 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LogIn, Mail, KeyRound } from "lucide-react";
 import { Logo } from "@/components/common/logo";
-import Image from "next/image";
+
+import { getAuth, GoogleAuthProvider, signInWithPopup, getAdditionalUserInfo } from "firebase/auth";
+import { getFirestore, doc, setDoc }  from "firebase/firestore";
+import { useRouter } from "next/navigation";
+import { useToast } from "@/hooks/use-toast";
+// import { app as firebaseApp } from '@/lib/firebase'; // Not strictly needed if using getAuth() without args and firebase is initialized
 
 // Google Icon SVG as a component
 const GoogleIcon = () => (
@@ -21,15 +27,71 @@ const GoogleIcon = () => (
 
 
 export default function SignInPage() {
+  const router = useRouter();
+  const { toast } = useToast();
+
   const handleSignIn = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     // TODO: Implement Firebase email/password sign in
-    alert("Sign in functionality to be implemented.");
+    toast({
+        variant: "default", // Or another appropriate variant
+        title: "Sign In (Email/Password)",
+        description: "Email/Password sign-in functionality is not yet implemented.",
+    });
   };
 
-  const handleGoogleSignIn = () => {
-    // TODO: Implement Firebase Google Sign In
-    alert("Google Sign in functionality to be implemented.");
+  const handleGoogleSignIn = async () => {
+    const auth = getAuth();
+    const provider = new GoogleAuthProvider();
+    const db = getFirestore();
+
+    try {
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      const additionalUserInfo = getAdditionalUserInfo(result);
+      
+      // Prepare user data, conditionally adding fields for new users
+      const userDataToSet: any = {
+        uid: user.uid,
+        displayName: user.displayName,
+        email: user.email,
+        photoURL: user.photoURL,
+        lastLoginAt: new Date().toISOString(),
+      };
+
+      if (additionalUserInfo?.isNewUser) {
+        userDataToSet.isCulturalUser = false;
+        userDataToSet.culturalInterest = "";
+        userDataToSet.createdAt = new Date().toISOString();
+      }
+      
+      // Store or update user info in Firestore
+      await setDoc(doc(db, "users", user.uid), userDataToSet, { merge: true });
+
+      toast({
+        title: "Signed In Successfully!",
+        description: `Welcome back, ${user.displayName || 'User'}!`,
+      });
+      router.push('/discover');
+    } catch (error: any) {
+      console.error("Google Sign-In Error:", error);
+      let errorMessage = "An unexpected error occurred during Google Sign-In.";
+      if (error.code === 'auth/account-exists-with-different-credential') {
+        errorMessage = "An account already exists with this email using a different sign-in method. Try the original method.";
+      } else if (error.code === 'auth/popup-closed-by-user') {
+        errorMessage = "Sign-in popup was closed. Please try again.";
+      } else if (error.code === 'auth/network-request-failed') {
+        errorMessage = "Network error. Please check your connection and try again.";
+      }
+      else {
+        errorMessage = error.message || errorMessage;
+      }
+      toast({
+        variant: "destructive",
+        title: "Google Sign-In Failed",
+        description: errorMessage,
+      });
+    }
   };
 
   return (
