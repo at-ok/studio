@@ -32,6 +32,7 @@ interface SharedRoute {
 }
 
 const SHARED_ROUTES_LS_KEY = 'userSharedRoutes';
+const VALID_MAPS_LINK_PREFIX = "https://maps.app.goo.gl/";
 
 export default function CreatePage() {
   const [mode, setMode] = useState<CreateMode>('options');
@@ -88,11 +89,19 @@ export default function CreatePage() {
   const handleLinkPaste = (e: React.ChangeEvent<HTMLInputElement>) => {
     const link = e.target.value;
     setGoogleMapsLink(link);
+
     if (!uploadedImageDataUrl) { // Only set picsum if no custom image is uploaded
-      if (link.startsWith("https://maps.google.com/") || link.startsWith("https://www.google.com/maps/")) {
+      if (link.startsWith(VALID_MAPS_LINK_PREFIX)) {
         setPicsumPreviewUrl(`https://picsum.photos/seed/${encodeURIComponent(link)}/600/300`);
       } else {
         setPicsumPreviewUrl(null);
+        if (link.trim() !== '' && !link.startsWith(VALID_MAPS_LINK_PREFIX)) {
+          toast({
+            variant: "destructive",
+            title: "Invalid Google Maps Link",
+            description: `Route link must start with '${VALID_MAPS_LINK_PREFIX}'.`,
+          });
+        }
       }
     }
   };
@@ -121,20 +130,31 @@ export default function CreatePage() {
   const removeUploadedImage = () => {
     setUploadedImageDataUrl(null);
     // Restore picsum preview if link is valid
-    if (googleMapsLink.startsWith("https://maps.google.com/") || googleMapsLink.startsWith("https://www.google.com/maps/")) {
+    if (googleMapsLink.startsWith(VALID_MAPS_LINK_PREFIX)) {
       setPicsumPreviewUrl(`https://picsum.photos/seed/${encodeURIComponent(googleMapsLink)}/600/300`);
+    } else {
+      setPicsumPreviewUrl(null); // Ensure preview is null if link is not valid
     }
   };
 
   const handleSubmitSharedRoute = (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!googleMapsLink.startsWith(VALID_MAPS_LINK_PREFIX)) {
+      toast({
+        variant: "destructive",
+        title: "Invalid Google Maps Link",
+        description: `Please provide a valid Google Maps link starting with '${VALID_MAPS_LINK_PREFIX}'.`,
+      });
+      return;
+    }
+
     let finalImageUrl = uploadedImageDataUrl || picsumPreviewUrl || `https://picsum.photos/seed/${encodeURIComponent(routeName || 'shared_route')}/600/400`;
     let finalImageHint = "generic route image";
 
     if (uploadedImageDataUrl) {
       finalImageHint = "user uploaded";
-    } else if (picsumPreviewUrl) {
+    } else if (picsumPreviewUrl) { // picsumPreviewUrl is only set if the link is valid
       finalImageHint = "map preview";
     }
 
@@ -207,7 +227,7 @@ export default function CreatePage() {
                 <Share2 className="h-6 w-6 text-primary" /> Share Existing Route
               </CardTitle>
               <CardDescription>
-                Already have a route planned on Google Maps? Share the link and optionally add your own image.
+                Already have a route planned on Google Maps? Share the link (must start with {VALID_MAPS_LINK_PREFIX}) and optionally add your own image.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -276,12 +296,13 @@ export default function CreatePage() {
                 <Input 
                   id="googleMapsLink" 
                   type="url" 
-                  placeholder="https://maps.google.com/..." 
+                  placeholder={`${VALID_MAPS_LINK_PREFIX}...`}
                   value={googleMapsLink} 
                   onChange={handleLinkPaste} 
                   required 
                   className="py-3"
                 />
+                <p className="text-xs text-muted-foreground">Must be a valid Google Maps share link starting with '{VALID_MAPS_LINK_PREFIX}'.</p>
               </div>
               
               <div className="space-y-2">
@@ -360,22 +381,22 @@ export default function CreatePage() {
             <ol className="list-decimal list-inside space-y-2 text-foreground">
               <li>Open <a href="https://www.google.com/maps" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">Google Maps <ExternalLink className="inline h-4 w-4"/></a> in a new tab or its app.</li>
               <li>Plan your route by adding desired waypoints and spots.</li>
-              <li>Once your route is finalized, generate a shareable link for it.</li>
+              <li>Once your route is finalized, generate a shareable link for it (it should start with {VALID_MAPS_LINK_PREFIX}).</li>
               <li>Come back here and choose "Share Existing Route" to submit your link. You'll be able to add a custom image too!</li>
             </ol>
             
-            <Card className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border-l-4 border-primary shadow-sm rounded-lg mt-6">
-              <CardContent className="p-6">
-                <div className="flex items-start gap-4">
-                  <Lightbulb className="h-10 w-10 text-primary mt-1 flex-shrink-0" />
-                  <div>
-                    <h4 className="font-semibold text-primary text-lg">Pro Tip: Adding Detail</h4>
-                    <p className="text-sm text-foreground/80 mt-1">
-                      For the best experience, make your route descriptive. Include notes about specific cultural spots, historical significance, or unique features along the way. This helps others appreciate the journey!
-                    </p>
+            <Card className="border-primary border-l-4 bg-primary/5 rounded-lg shadow-sm mt-6">
+                <CardContent className="p-6">
+                  <div className="flex items-start gap-4">
+                    <Lightbulb className="h-10 w-10 text-primary mt-1 flex-shrink-0" />
+                    <div>
+                      <h4 className="font-semibold text-primary text-lg">Pro Tip: Adding Detail</h4>
+                      <p className="text-sm text-foreground/90 mt-1">
+                        For the best experience, make your route descriptive. Include notes about specific cultural spots, historical significance, or unique features along the way. This helps others appreciate the journey!
+                      </p>
+                    </div>
                   </div>
-                </div>
-              </CardContent>
+                </CardContent>
             </Card>
 
 
