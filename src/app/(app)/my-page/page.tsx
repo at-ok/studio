@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ListChecks, Route, MessageSquare, Star, Award, Edit3, Gift, Settings, Loader2, Trash2, Eye } from "lucide-react";
+import { ListChecks, Route, MessageSquare, Star, Award, Edit3, Gift, Settings, Loader2, Trash2, Eye, Compass } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -17,7 +17,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  // AlertDialogTrigger, // No longer needed here for this specific pattern
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
 import { getAuth, onAuthStateChanged, type User } from "firebase/auth";
@@ -230,13 +230,17 @@ export default function MyPage() {
                         <Edit3 className="h-5 w-5 text-muted-foreground hover:text-primary" />
                     </Link>
                   </Button>
-                  <Button variant="ghost" size="icon" onClick={() => setRouteToDelete(route)} aria-label={`Delete ${route.title}`}>
-                      <Trash2 className="h-5 w-5 text-muted-foreground hover:text-destructive" />
-                  </Button>
+                  <AlertDialogTrigger asChild>
+                     <Button variant="ghost" size="icon" onClick={() => setRouteToDelete(route)} aria-label={`Delete ${route.title}`}>
+                        <Trash2 className="h-5 w-5 text-muted-foreground hover:text-destructive" />
+                    </Button>
+                  </AlertDialogTrigger>
                 </div>
               </div>
             )) : (
-              <p className="text-muted-foreground text-sm">You haven't shared any routes yet. <Link href="/create" className="text-primary hover:underline font-medium">Share your first route!</Link></p>
+              <div className="text-center py-4">
+                <p className="text-muted-foreground text-sm mb-4">Ready to share your cultural discoveries or favorite local paths? Create your first route and inspire others!</p>
+              </div>
             )}
              <Button variant="outline" asChild className="mt-4 border-primary text-primary hover:bg-primary/10 w-full sm:w-auto">
                 <Link href="/create"><Route className="h-4 w-4 mr-2"/>Share or Create a New Route</Link>
@@ -296,7 +300,15 @@ export default function MyPage() {
                 </Button>
               </div>
             )) : (
-               <p className="text-muted-foreground text-sm">You haven't marked any routes as traveled yet. <Link href="/discover" className="text-primary hover:underline font-medium">Start exploring!</Link></p>
+              <div className="text-center py-4">
+                <p className="text-muted-foreground text-sm mb-4">No adventures logged yet! Explore captivating routes, mark them as 'traveled', and build your personal journey log.</p>
+                <Button asChild variant="default" className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                    <Link href="/discover">
+                        <Compass className="h-4 w-4 mr-2" />
+                        Discover Routes
+                    </Link>
+                </Button>
+              </div>
             )}
           </div>
           
