@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState, type FormEvent } from 'react';
@@ -12,7 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { suggestComments, type SuggestCommentsInput, type SuggestCommentsOutput } from '@/ai/flows/suggest-comments';
-import { MapPin, Star, Clock, User, Camera, MessageSquare, Send, ThumbsUp, Lightbulb, Loader2, AlertTriangle, CheckCircle, ImagePlus, Info } from 'lucide-react';
+import { MapPin, Star, Clock, User, Camera, MessageSquare, Send, ThumbsUp, Lightbulb, Loader2, AlertTriangle, CheckCircle, ImagePlus, Info, ExternalLink } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 // Extended Route Detail type
@@ -46,27 +47,27 @@ interface RouteDetail {
   imageHint?: string;
   tags: string[];
   rating: number | null;
-  reviewsCount: number; // Renamed from reviews
+  reviewsCount: number;
   duration: string;
-  difficulty?: string; // Make optional
+  difficulty?: string; 
   creator: {
     name: string;
-    avatarUrl?: string; // Make optional
+    avatarUrl?: string;
     avatarHint?: string;
   };
   isCulturalRoute: boolean;
   startPoint: string;
-  spots?: RouteSpot[]; // Make optional
-  communityFeedbackSummary?: string; // Make optional
+  spots?: RouteSpot[]; 
+  communityFeedbackSummary?: string;
   comments: Comment[];
-  googleMapsLink?: string; // For shared routes
+  googleMapsLink?: string;
 }
 
 
 // Mock data for a single route (can be fallback or part of initial data)
 const mockRouteDetailList: RouteDetail[] = [
   {
-    id: "mock-1", // Ensure this matches an ID from discover page's mockRoutes if you want direct navigation
+    id: "mock-1", 
     title: "Ancient Temple Trail",
     description: "A captivating journey through historic temples, serene bamboo forests, and breathtaking viewpoints. This trail offers a deep dive into local traditions and natural beauty. Suitable for moderate fitness levels.",
     longDescription: "The Ancient Temple Trail starts at the Whispering Pines Gate and winds its way up Mount serenity. Along the path, you'll encounter the Sunken Pagoda, the Moon Reflection Pond, and the thousand-year-old Guardian Tree. Each spot has its own story, passed down through generations. The trail culminates at the Summit Shrine, offering panoramic views of the entire valley. Be sure to wear comfortable shoes and bring water. The best times to visit are early morning or late afternoon to avoid crowds and catch the golden light.",
@@ -96,7 +97,6 @@ const mockRouteDetailList: RouteDetail[] = [
       { id: "c2", user: "HistoryBuff", avatarUrl: "https://picsum.photos/seed/buff/50/50", avatarHint: "buff avatar", text: "A fantastic route for anyone interested in local history. The Sunken Pagoda was my favorite.", rating: 4, date: "5 days ago" },
     ]
   },
-  // Add other mock details if needed, matching IDs from DiscoverPage
    {
     id: "mock-2",
     title: "Urban Art Walk",
@@ -153,34 +153,40 @@ export default function RouteDetailPage() {
 
   useEffect(() => {
     setIsLoadingRoute(true);
-    let foundRoute: RouteDetail | undefined | null = null;
+    let foundRouteData: Partial<RouteDetail> | undefined | null = null;
 
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && (routeId.startsWith('user_shared_') || routeId.startsWith('user_created_'))) {
       const storedUserRoutesRaw = localStorage.getItem(SHARED_ROUTES_LS_KEY);
-      const storedUserRoutes: RouteDetail[] = storedUserRoutesRaw ? JSON.parse(storedUserRoutesRaw) : [];
-      foundRoute = storedUserRoutes.find(r => r.id === routeId);
+      // Ensure storedUserRoutes are compatible with RouteDetail or a simpler shared type
+      const storedUserRoutes: Array<Partial<RouteDetail> & { creator: string | RouteDetail['creator'] }> = storedUserRoutesRaw ? JSON.parse(storedUserRoutesRaw) : [];
+      const rawFoundRoute = storedUserRoutes.find(r => r.id === routeId);
+      if (rawFoundRoute) {
+        // Adapt SharedRoute to RouteDetail structure
+        foundRouteData = {
+          ...rawFoundRoute,
+          creator: typeof rawFoundRoute.creator === 'string' ? { name: rawFoundRoute.creator } : rawFoundRoute.creator,
+          reviewsCount: rawFoundRoute.reviewsCount || (rawFoundRoute.rating !== null && rawFoundRoute.rating !== undefined ? 1 : 0),
+          spots: rawFoundRoute.spots || [],
+          comments: rawFoundRoute.comments || [],
+          longDescription: rawFoundRoute.longDescription || rawFoundRoute.description,
+          difficulty: rawFoundRoute.difficulty || "Varies",
+          imageHint: rawFoundRoute.imageHint || "route image",
+        };
+      }
     }
 
-    if (!foundRoute) {
-      foundRoute = mockRouteDetailList.find(r => r.id === routeId);
+    if (!foundRouteData) {
+      foundRouteData = mockRouteDetailList.find(r => r.id === routeId);
     }
     
-    // If route is from localStorage (likely simpler structure), adapt it.
-    if (foundRoute) {
-        setRoute({
-            ...foundRoute,
-            reviewsCount: foundRoute.reviewsCount || (foundRoute.rating !== null ? 1 : 0), // Handle potential missing field
-            creator: foundRoute.creator || { name: "Community Contributor" },
-            spots: foundRoute.spots || [],
-            comments: foundRoute.comments || [],
-            longDescription: foundRoute.longDescription || foundRoute.description,
-        });
-        setCurrentComments(foundRoute.comments || []);
+    if (foundRouteData) {
+        setRoute(foundRouteData as RouteDetail); // Cast after ensuring all required fields are present or defaulted
+        setCurrentComments(foundRouteData.comments || []);
     } else {
-        setRoute(null); // Route not found
+        setRoute(null); 
     }
 
-    const timer = setTimeout(() => setIsLoadingRoute(false), 300); // Shortened delay
+    const timer = setTimeout(() => setIsLoadingRoute(false), 300); 
     return () => clearTimeout(timer);
   }, [routeId]);
 
@@ -219,8 +225,8 @@ export default function RouteDetailPage() {
       return;
     }
     const newCommentEntry: Comment = {
-      id: `c${currentComments.length + 3}_${Date.now()}`, // mock ID
-      user: "CurrentUser", // replace with actual user
+      id: `c${currentComments.length + 3}_${Date.now()}`, 
+      user: "CurrentUser", 
       avatarUrl: "https://picsum.photos/seed/currentuser/50/50",
       avatarHint: "current user avatar",
       text: newComment,
@@ -242,7 +248,6 @@ export default function RouteDetailPage() {
   const handlePhotoUpload = (spotId: string, files: FileList | null) => {
     if (files && route && route.spots) {
       setUploadedPhotos(prev => ({...prev, [spotId]: Array.from(files)}));
-      // Simulate upload
       toast({ title: `${files.length} photo(s) selected for ${route.spots.find(s => s.id === spotId)?.name}. They will be uploaded when you submit your review.`});
     }
   };
@@ -263,7 +268,6 @@ export default function RouteDetailPage() {
     );
   }
 
-
   return (
     <div className="space-y-8">
       {/* Route Header */}
@@ -272,30 +276,30 @@ export default function RouteDetailPage() {
           <Image src={route.imageUrl} alt={route.title} layout="fill" objectFit="cover" data-ai-hint={route.imageHint || "route image"} />
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
           <div className="absolute bottom-0 left-0 p-6 md:p-8">
-            <h1 className="text-3xl md:text-4xl font-bold text-white shadow-text">{route.title}</h1>
+            <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight drop-shadow-lg">{route.title}</h1>
             {route.isCulturalRoute && (
-              <Badge variant="default" className="mt-2 bg-primary text-primary-foreground text-sm py-1 px-3">Cultural Route</Badge>
+              <Badge variant="default" className="mt-2 bg-primary text-primary-foreground text-sm py-1 px-3 shadow-md">Cultural Route</Badge>
             )}
           </div>
         </div>
         <CardContent className="p-6 md:p-8">
           <div className="grid md:grid-cols-3 gap-6 mb-6">
             <div className="flex items-center text-foreground">
-              <Clock className="h-6 w-6 mr-2 text-primary" />
+              <Clock className="h-6 w-6 mr-2.5 text-primary" />
               <div>
                 <p className="text-sm text-muted-foreground">Duration</p>
                 <p className="font-semibold">{route.duration}</p>
               </div>
             </div>
             <div className="flex items-center text-foreground">
-              <Star className="h-6 w-6 mr-2 text-primary" />
+              <Star className="h-6 w-6 mr-2.5 text-primary" />
               <div>
                 <p className="text-sm text-muted-foreground">Rating</p>
                 <p className="font-semibold">{route.rating !== null ? `${route.rating} (${route.reviewsCount} reviews)` : `No reviews yet`}</p>
               </div>
             </div>
             <div className="flex items-center text-foreground">
-              <User className="h-6 w-6 mr-2 text-primary" />
+              <User className="h-6 w-6 mr-2.5 text-primary" />
               <div>
                 <p className="text-sm text-muted-foreground">Created by</p>
                 <p className="font-semibold">{route.creator.name}</p>
@@ -303,16 +307,36 @@ export default function RouteDetailPage() {
             </div>
           </div>
           <p className="text-muted-foreground mb-4">{route.description}</p>
-          {route.googleMapsLink && (
-            <p className="text-sm mb-4">
-              <a href={route.googleMapsLink} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium flex items-center gap-1">
-                <MapPin className="h-4 w-4"/> View on Google Maps
-              </a>
-            </p>
-          )}
+          
           <div className="flex flex-wrap gap-2 mb-6">
             {route.tags.map(tag => <Badge key={tag} variant="secondary">{tag}</Badge>)}
           </div>
+
+          {route.googleMapsLink && (
+             <div className="my-6">
+                <a 
+                    href={route.googleMapsLink} 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="inline-flex items-center gap-2 text-primary hover:underline font-medium text-sm mb-3"
+                >
+                    <ExternalLink className="h-4 w-4"/> View Full Map on Google Maps
+                </a>
+                <div className="aspect-video rounded-lg overflow-hidden border border-border shadow-md">
+                    <iframe
+                    src={route.googleMapsLink.replace("/maps/", "/maps/embed/")} // Basic attempt to convert to embeddable link if possible
+                    width="100%"
+                    height="100%"
+                    style={{ border:0 }}
+                    allowFullScreen={true}
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                    title={`Map of ${route.title}`}
+                    ></iframe>
+                </div>
+            </div>
+          )}
+          
           <Separator className="my-6" />
           <h2 className="text-xl font-semibold text-foreground mb-3">About this Route</h2>
           <p className="text-foreground whitespace-pre-line leading-relaxed">{route.longDescription || route.description}</p>
@@ -327,10 +351,12 @@ export default function RouteDetailPage() {
             <CardDescription>Key points of interest along the trail. Tap a spot to see photos or add your own!</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Placeholder for Map Display */}
-            <div className="bg-muted rounded-lg h-64 flex items-center justify-center text-muted-foreground">
-              <MapPin className="h-12 w-12 mr-2" /> Interactive Map Placeholder
-            </div>
+            {/* Conditional Map Placeholder only if googleMapsLink is not present */}
+            {!route.googleMapsLink && (
+                 <div className="bg-muted rounded-lg h-64 flex items-center justify-center text-muted-foreground">
+                    <MapPin className="h-12 w-12 mr-2" /> Interactive Map Placeholder (Spots)
+                </div>
+            )}
 
             {route.spots.map((spot, index) => (
               <div key={spot.id} className="p-4 border border-border rounded-lg hover:shadow-md transition-shadow">
@@ -381,7 +407,7 @@ export default function RouteDetailPage() {
             ))}
           </CardContent>
         </Card>
-      ) : (
+      ) : !route.googleMapsLink && ( // Show this card only if no spots AND no googleMapsLink to embed
         <Card className="rounded-xl shadow-lg">
             <CardHeader>
                 <CardTitle className="text-2xl font-semibold text-foreground">Route Itinerary & Spots</CardTitle>
@@ -389,7 +415,7 @@ export default function RouteDetailPage() {
             <CardContent>
                 <div className="flex items-center gap-2 text-muted-foreground p-4 bg-muted/50 rounded-md">
                     <Info className="h-5 w-5"/>
-                    <p>No specific spots listed for this route yet. Enjoy the general journey!</p>
+                    <p>No specific spots or map link provided for this route yet. Enjoy the general journey!</p>
                 </div>
             </CardContent>
         </Card>
@@ -501,3 +527,4 @@ export default function RouteDetailPage() {
     </div>
   );
 }
+

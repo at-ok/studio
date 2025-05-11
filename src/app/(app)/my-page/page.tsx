@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -112,7 +113,7 @@ export default function MyPage() {
         <Card className="lg:col-span-2 rounded-xl shadow-md">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-xl"><Route className="h-6 w-6 text-primary" />My Shared Routes</CardTitle>
-            <CardDescription>Manage routes you've created and shared. Click a route to view its map (if available) or edit its details.</CardDescription>
+            <CardDescription>Manage routes you've created and shared. Click a route to view its details and map.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {isLoadingSharedRoutes ? (
@@ -121,30 +122,17 @@ export default function MyPage() {
               </div>
             ) : userSharedRoutes.length > 0 ? userSharedRoutes.map(route => (
               <div key={route.id} className="flex items-center justify-between gap-4 p-3 border border-border rounded-lg hover:bg-muted/20 transition-colors">
-                {route.googleMapsLink ? (
-                  <a 
-                    href={route.googleMapsLink} 
-                    target="_blank" 
-                    rel="noopener noreferrer" 
-                    className="flex items-center gap-4 flex-grow no-underline text-current cursor-pointer"
-                    aria-label={`View ${route.title} on Google Maps`}
-                  >
-                    <RouteItemContent route={route} />
+                <Link href={`/route/${route.id}`} passHref legacyBehavior>
+                  <a className="flex items-center gap-4 flex-grow no-underline text-current cursor-pointer" aria-label={`View details for ${route.title}`}>
+                      <RouteItemContent route={route} />
                   </a>
-                ) : (
-                  // If no Google Maps link, clicking the item could link to internal page, or be non-interactive
-                  // For now, let's make it link to the internal route page as well.
-                  <Link href={`/route/${route.id}`} passHref legacyBehavior>
-                    <a className="flex items-center gap-4 flex-grow no-underline text-current cursor-pointer" aria-label={`View details for ${route.title}`}>
-                       <RouteItemContent route={route} />
-                    </a>
+                </Link>
+                <Button variant="ghost" size="icon" asChild TooltipContent="Edit route details">
+                  {/* This could also link to a specific edit page e.g. /create/${route.id}/edit or similar */}
+                  <Link href={`/route/${route.id}`} aria-label={`Edit details for ${route.title}`}> 
+                      <Edit3 className="h-5 w-5 text-muted-foreground hover:text-primary" />
                   </Link>
-                )}
-                 <Button variant="ghost" size="icon" asChild TooltipContent="Edit route details">
-                    <Link href={`/route/${route.id}`} aria-label={`Edit details for ${route.title}`}>
-                        <Edit3 className="h-5 w-5 text-muted-foreground hover:text-primary" />
-                    </Link>
-                 </Button>
+                </Button>
               </div>
             )) : (
               <p className="text-muted-foreground text-sm">You haven't shared any routes yet. <Link href="/create" className="text-primary hover:underline font-medium">Share your first route!</Link></p>
@@ -234,3 +222,4 @@ export default function MyPage() {
     </div>
   );
 }
+
