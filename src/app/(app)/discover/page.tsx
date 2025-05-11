@@ -1,14 +1,15 @@
+
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Search, MapPin, Star, Clock, Users, Loader2 } from "lucide-react";
 import Image from "next/image";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import Link from 'next/link';
+import { GoogleMap, LoadScript, Marker, InfoWindow } from '@react-google-maps/api';
 
 // Route type definition
 interface DiscoverRoute {
@@ -23,8 +24,8 @@ interface DiscoverRoute {
   duration: string;
   creator: string;
   isCulturalRoute: boolean;
-  startPoint: string;
-  mapPosition?: { top: string; left: string };
+  startPoint: string; // Text description of start point
+  startPointCoords?: { lat: number; lng: number }; // Geographic coordinates
   googleMapsLink?: string;
 }
 
@@ -44,8 +45,8 @@ const mockRoutes: DiscoverRoute[] = [
     duration: "3 hours",
     creator: "Culture Enthusiast",
     isCulturalRoute: true,
-    startPoint: "Central Park",
-    mapPosition: { top: '25%', left: '30%' },
+    startPoint: "Central Park Entrance",
+    startPointCoords: { lat: 35.6895, lng: 139.6917 }, // Example: Tokyo Imperial Palace area
   },
   {
     id: "mock-2",
@@ -59,8 +60,8 @@ const mockRoutes: DiscoverRoute[] = [
     duration: "2 hours",
     creator: "City Explorer",
     isCulturalRoute: false,
-    startPoint: "Downtown Plaza",
-    mapPosition: { top: '60%', left: '65%' },
+    startPoint: "Shibuya Crossing",
+    startPointCoords: { lat: 35.6595, lng: 139.7006 }, // Example: Shibuya Crossing
   },
   {
     id: "mock-3",
@@ -74,15 +75,36 @@ const mockRoutes: DiscoverRoute[] = [
     duration: "2.5 hours",
     creator: "Local Historian",
     isCulturalRoute: true,
-    startPoint: "Old Harbor",
-    mapPosition: { top: '45%', left: '15%' },
+    startPoint: "Kamakura Beach",
+    startPointCoords: { lat: 35.3060, lng: 139.5470 }, // Example: Kamakura
   },
 ];
+
+const mapContainerStyle = {
+  width: '100%',
+  height: '400px', // Adjust height as needed
+};
+
+// Default center (e.g., Tokyo)
+const defaultCenter = {
+  lat: 35.6895,
+  lng: 139.6917,
+};
 
 export default function DiscoverPage() {
   const [displayedRoutes, setDisplayedRoutes] = useState<DiscoverRoute[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedRoute, setSelectedRoute] = useState<DiscoverRoute | null>(null);
+  const [map, setMap] = useState<google.maps.Map | null>(null);
+
+  const onMapLoad = useCallback((mapInstance: google.maps.Map) => {
+    setMap(mapInstance);
+  }, []);
+
+  const onMapUnmount = useCallback(() => {
+    setMap(null);
+  }, []);
 
   useEffect(() => {
     setIsLoading(true);
@@ -90,11 +112,9 @@ export default function DiscoverPage() {
       const storedUserRoutesRaw = localStorage.getItem(SHARED_ROUTES_LS_KEY);
       const storedUserRoutes: DiscoverRoute[] = storedUserRoutesRaw ? JSON.parse(storedUserRoutesRaw) : [];
       
-      // Combine user routes with mock routes, ensuring user routes are prioritized and mock routes are filtered if IDs overlap
       const uniqueMockRoutes = mockRoutes.filter(mr => !storedUserRoutes.some(ur => ur.id === mr.id));
       setDisplayedRoutes([...storedUserRoutes, ...uniqueMockRoutes]);
     } else {
-      // Fallback for SSR or environments without localStorage
       setDisplayedRoutes(mockRoutes);
     }
     setIsLoading(false);
@@ -108,6 +128,13 @@ export default function DiscoverPage() {
 
   if (isLoading) {
     return <div className="flex items-center justify-center h-[calc(100vh-200px)]"><Loader2 className="h-12 w-12 animate-spin text-primary" /> <p className="ml-2">Loading routes...</p></div>;
+  }
+
+  // Ensure the API key is set. If not, you might want to display a message or a fallback.
+  const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  if (!googleMapsApiKey) {
+      console.warn("Google Maps API key is not set. Map functionality will be limited.");
+      // Optionally return a fallback UI or message here
   }
 
   return (
@@ -132,40 +159,46 @@ export default function DiscoverPage() {
         <h2 className="text-2xl font-semibold tracking-tight text-foreground mb-4">Route Starting Points</h2>
         <Card className="rounded-xl shadow-lg overflow-hidden">
           <CardContent className="p-0">
-            <div className="relative w-full aspect-[16/9] md:aspect-[2.5/1] bg-muted">
-              <Image
-                src="https://picsum.photos/seed/routemap/1200/480"
-                alt="Map of nearby routes"
-                fill={true}
-                style={{objectFit:"cover"}}
-                data-ai-hint="abstract map"
-                className="opacity-70"
-              />
-              <TooltipProvider>
-                {/* Only display pins for routes that have mapPosition data */}
-                {displayedRoutes.filter(route => route.mapPosition).map(route => (
-                  <Tooltip key={`map-pin-${route.id}`} delayDuration={100}>
-                    <TooltipTrigger asChild>
-                      <div
-                        className="absolute p-1 bg-primary rounded-full shadow-md cursor-pointer hover:scale-110 transition-transform flex items-center justify-center"
-                        style={{ 
-                          top: route.mapPosition!.top,  // Added non-null assertion as we filter
-                          left: route.mapPosition!.left, // Added non-null assertion
-                          transform: 'translate(-50%, -50%)' 
-                        }}
-                        aria-label={`Location pin for ${route.title}`}
-                      >
-                        <MapPin className="h-6 w-6 text-primary-foreground" />
+            {googleMapsApiKey ? (
+              <LoadScript googleMapsApiKey={googleMapsApiKey}>
+                <GoogleMap
+                  mapContainerStyle={mapContainerStyle}
+                  center={defaultCenter}
+                  zoom={10}
+                  onLoad={onMapLoad}
+                  onUnmount={onMapUnmount}
+                >
+                  {filteredRoutes.map(route => (
+                    route.startPointCoords && (
+                      <Marker
+                        key={`map-pin-${route.id}`}
+                        position={route.startPointCoords}
+                        onClick={() => setSelectedRoute(route)}
+                        title={route.title}
+                      />
+                    )
+                  ))}
+                  {selectedRoute && selectedRoute.startPointCoords && (
+                    <InfoWindow
+                      position={selectedRoute.startPointCoords}
+                      onCloseClick={() => setSelectedRoute(null)}
+                    >
+                      <div>
+                        <h3 className="font-semibold text-foreground">{selectedRoute.title}</h3>
+                        <p className="text-sm text-muted-foreground">Starts at: {selectedRoute.startPoint}</p>
+                        <Link href={`/route/${selectedRoute.id}`} className="text-sm text-primary hover:underline">
+                          View Details
+                        </Link>
                       </div>
-                    </TooltipTrigger>
-                    <TooltipContent className="bg-background border-border shadow-xl rounded-md">
-                      <p className="font-semibold text-foreground">{route.title}</p>
-                      <p className="text-sm text-muted-foreground">Starts at: {route.startPoint}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                ))}
-              </TooltipProvider>
-            </div>
+                    </InfoWindow>
+                  )}
+                </GoogleMap>
+              </LoadScript>
+            ) : (
+              <div className="w-full aspect-[16/9] md:aspect-[2.5/1] bg-muted flex items-center justify-center">
+                <p className="text-muted-foreground">Map cannot be displayed. Google Maps API key is missing.</p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </section>
@@ -197,7 +230,7 @@ export default function DiscoverPage() {
               </CardHeader>
               <CardContent className="p-6 flex-grow">
                 <CardTitle className="text-xl font-semibold mb-2 text-foreground">{route.title}</CardTitle>
-                <CardDescription className="text-muted-foreground text-sm mb-3 line-clamp-3 h-12">{route.description}</CardDescription> {/* Fixed height for consistency */}
+                <CardDescription className="text-muted-foreground text-sm mb-3 line-clamp-3 h-12">{route.description}</CardDescription>
                 <div className="flex items-center text-sm text-muted-foreground mb-1">
                   <MapPin className="h-4 w-4 mr-1.5 text-primary" /> Starts at {route.startPoint}
                 </div>
