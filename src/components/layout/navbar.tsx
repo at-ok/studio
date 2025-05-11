@@ -1,8 +1,7 @@
-
 "use client";
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation'; // Added useRouter
+import { usePathname, useRouter } from 'next/navigation';
 import { Compass, PlusSquare, User, LogIn, LogOut, Menu } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -18,6 +17,8 @@ import {
 import { Logo } from '@/components/common/logo';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useState, useEffect } from 'react';
+import { getAuth, onAuthStateChanged, signOut as firebaseSignOut, type User as FirebaseUser } from "firebase/auth";
+import { auth as firebaseAuth } from "@/lib/firebase";
 
 const navItems = [
   { name: 'Discover', href: '/discover', icon: Compass, 'aria-label': 'Discover routes' },
@@ -25,49 +26,54 @@ const navItems = [
   { name: 'My Page', href: '/my-page', icon: User, 'aria-label': 'View your page' },
 ];
 
-// Mock authentication state
-// In a real app, this would come from an auth context/hook
-const useMockAuth = () => {
-  const [user, setUser] = useState<{ name: string; email: string; imageUrl?: string } | null>(null);
+interface AppUser {
+  uid: string;
+  name: string | null;
+  email: string | null;
+  imageUrl?: string | null;
+}
+
+const useAuth = () => {
+  const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
   useEffect(() => {
-    // Simulate fetching user data
-    const storedUser = typeof window !== 'undefined' ? localStorage.getItem('mockUser') : null;
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch (error) {
-        console.error("Failed to parse mockUser from localStorage", error);
-        localStorage.removeItem('mockUser'); // Clear corrupted item
+    const unsubscribe = onAuthStateChanged(firebaseAuth, (currentFirebaseUser: FirebaseUser | null) => {
+      if (currentFirebaseUser) {
+        setUser({
+          uid: currentFirebaseUser.uid,
+          name: currentFirebaseUser.displayName,
+          email: currentFirebaseUser.email,
+          imageUrl: currentFirebaseUser.photoURL,
+        });
+      } else {
+        setUser(null);
       }
-    }
-    setLoading(false);
+      setLoading(false);
+    });
+    return () => unsubscribe();
   }, []);
 
+  const handleLogout = async () => {
+    try {
+      await firebaseSignOut(firebaseAuth);
+      // setUser(null); // onAuthStateChanged will handle this
+      router.push('/discover'); 
+    } catch (error) {
+      console.error("Logout Error:", error);
+      // Potentially show a toast message for logout error
+    }
+  };
 
-  const login = () => {
-    const mockUserData = { name: 'User Name', email: 'user@example.com', imageUrl: 'https://picsum.photos/100/100?q=user' };
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('mockUser', JSON.stringify(mockUserData));
-    }
-    setUser(mockUserData);
-  };
-  const logout = () => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('mockUser');
-    }
-    setUser(null);
-  };
-  
-  return { user, loading, login, logout };
+  return { user, loading, logout: handleLogout };
 };
 
 
 export function Navbar() {
   const pathname = usePathname();
-  const router = useRouter(); // Instantiate router
-  const { user, loading, logout } = useMockAuth(); // login from useMockAuth is not used for navigation anymore
+  const router = useRouter();
+  const { user, loading, logout } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const NavLink = ({ href, children, icon: Icon, 'aria-label': ariaLabel }: { href: string; children: React.ReactNode; icon: React.ElementType; 'aria-label': string }) => (
@@ -129,13 +135,13 @@ export function Navbar() {
           ))}
         </nav>
         <div className="flex items-center gap-3">
-          {user ? (
+          {user && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-10 w-10 rounded-full">
                   <Avatar className="h-10 w-10 border-2 border-primary/50">
-                    <AvatarImage src={user.imageUrl || `https://ui-avatars.com/api/?name=${user.name}&background=4CAF50&color=fff`} alt={user.name} data-ai-hint="user avatar" />
-                    <AvatarFallback>{user.name?.charAt(0).toUpperCase()}</AvatarFallback>
+                    <AvatarImage src={user.imageUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'U')}&background=4CAF50&color=fff`} alt={user.name || 'User'} data-ai-hint="user avatar" />
+                    <AvatarFallback>{user.name?.charAt(0).toUpperCase() || 'U'}</AvatarFallback>
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
@@ -160,11 +166,19 @@ export function Navbar() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+          )}
+
+          {/* This button is the one targeted by the prompt */}
+          {user ? (
+            <Button onClick={logout} variant="outline" className="hidden md:flex items-center gap-2 border-destructive text-destructive hover:bg-destructive/10">
+              <LogOut className="h-4 w-4" /> Sign Out
+            </Button>
           ) : (
              <Button onClick={handleSignIn} variant="outline" className="hidden md:flex items-center gap-2 border-primary text-primary hover:bg-primary/10 hover:text-primary">
               <LogIn className="h-4 w-4" /> Sign In
             </Button>
           )}
+
           <div className="md:hidden">
             <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
               <SheetTrigger asChild>
@@ -209,4 +223,3 @@ export function Navbar() {
     </header>
   );
 }
-
