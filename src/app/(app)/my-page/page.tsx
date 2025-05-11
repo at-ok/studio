@@ -17,7 +17,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  // AlertDialogTrigger, // No longer needed here for the main delete dialog trigger
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
 import { getAuth, onAuthStateChanged, type User } from "firebase/auth";
@@ -56,21 +56,32 @@ export default function MyPage() {
   const [userSharedRoutes, setUserSharedRoutes] = useState<MySharedRoute[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [routeToDelete, setRouteToDelete] = useState<MySharedRoute | null>(null);
+  const [isInitialUserLoad, setIsInitialUserLoad] = useState(true);
+
 
   const { toast } = useToast();
   const router = useRouter();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(firebaseAuth, async (currentUser) => {
+      setIsInitialUserLoad(false);
       if (currentUser) {
         setUser(currentUser);
+
+        // Determine if it's a truly new user (Firestore check would be more robust)
+        const creationTime = currentUser.metadata.creationTime ? new Date(currentUser.metadata.creationTime).getTime() : 0;
+        const lastSignInTime = currentUser.metadata.lastSignInTime ? new Date(currentUser.metadata.lastSignInTime).getTime() : 0;
+        // Consider "new" if account created within last few minutes of first sign-in
+        const isNewUserAccount = Math.abs(creationTime - lastSignInTime) < 5 * 60 * 1000;
+
+
         setFirebaseUser({
             name: currentUser.displayName || "User",
             email: currentUser.email || "No email",
             avatarUrl: currentUser.photoURL || `https://picsum.photos/seed/${currentUser.uid}/200/200`,
             avatarHint: "user avatar",
             joinDate: `Joined ${currentUser.metadata.creationTime ? new Date(currentUser.metadata.creationTime).toLocaleDateString() : 'recently'}`,
-            isNewUser: currentUser.metadata.creationTime === currentUser.metadata.lastSignInTime, // Basic check for new user
+            isNewUser: isNewUserAccount, 
         });
       } else {
         setUser(null);
@@ -114,11 +125,11 @@ export default function MyPage() {
   useEffect(() => {
     if (user && firebaseUser) { 
         fetchSharedRoutes();
-    } else if (!user) { 
+    } else if (!user && !isInitialUserLoad) { // Only act if initial load is done and user is null
         setUserSharedRoutes([]);
         setIsLoading(false); 
     }
-  }, [user, firebaseUser]);
+  }, [user, firebaseUser, isInitialUserLoad]);
 
 
   const handleDeleteSharedRoute = () => {
@@ -163,7 +174,7 @@ export default function MyPage() {
     </>
   );
 
-  if (isLoading || !user || !firebaseUser) {
+  if (isInitialUserLoad || isLoading) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-200px)]">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -171,194 +182,226 @@ export default function MyPage() {
       </div>
     );
   }
+  
+  if (!user || !firebaseUser) { // If after initial load, still no user, it means they should be redirected or shown nothing.
+    // The auth listener in useEffect already handles redirection to /auth/signin.
+    // This state primarily prevents rendering MyPage content before auth status is confirmed.
+     return (
+      <div className="flex items-center justify-center h-[calc(100vh-200px)]">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="ml-2 text-muted-foreground">Verifying authentication...</p>
+      </div>
+    );
+  }
+
+  // Placeholder for comment count, dynamically determined based on firebaseUser state.
+  const currentCommentsCount = firebaseUser?.isNewUser ? 0 : 1; 
 
 
   return (
     <div className="space-y-8">
-      <Card className="overflow-hidden rounded-xl shadow-lg">
-        <CardHeader className="bg-muted/30 p-6 flex flex-col md:flex-row items-start md:items-center gap-6">
-          <Avatar className="h-24 w-24 border-4 border-primary shadow-md">
-            <AvatarImage src={firebaseUser.avatarUrl} alt={firebaseUser.name} data-ai-hint={firebaseUser.avatarHint} />
-            <AvatarFallback className="text-3xl">{firebaseUser.name.charAt(0)}</AvatarFallback>
-          </Avatar>
-          <div className="flex-grow">
-            <CardTitle className="text-3xl font-bold text-foreground">{firebaseUser.name}</CardTitle>
-            <CardDescription className="text-muted-foreground mt-1">{firebaseUser.email}</CardDescription>
-            <p className="text-sm text-muted-foreground mt-0.5">{firebaseUser.joinDate}</p>
-            {firebaseUser.isCulturalUser && (
-              <p className="text-sm text-primary font-medium mt-1 flex items-center gap-1.5">
-                <Award className="h-4 w-4" /> Cultural Contributor: {firebaseUser.culturalInterest}
-              </p>
-            )}
-          </div>
-          <Button variant="outline" size="sm" asChild className="border-primary text-primary hover:bg-primary/10">
-            <Link href="/my-page/settings"> 
-                <Settings className="h-4 w-4 mr-2"/>Edit Profile
-            </Link>
-          </Button>
-        </CardHeader>
-      </Card>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2 rounded-xl shadow-md">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-xl"><Route className="h-6 w-6 text-primary" />My Shared Routes</CardTitle>
-            <CardDescription>Manage routes you've created and shared.</CardDescription>
+      <AlertDialog open={!!routeToDelete} onOpenChange={(isOpen) => { if (!isOpen) setRouteToDelete(null); }}>
+        <Card className="overflow-hidden rounded-xl shadow-lg">
+          <CardHeader className="bg-muted/30 p-6 flex flex-col md:flex-row items-start md:items-center gap-6">
+            <Avatar className="h-24 w-24 border-4 border-primary shadow-md">
+              <AvatarImage src={firebaseUser.avatarUrl} alt={firebaseUser.name} data-ai-hint={firebaseUser.avatarHint} />
+              <AvatarFallback className="text-3xl">{firebaseUser.name.charAt(0)}</AvatarFallback>
+            </Avatar>
+            <div className="flex-grow">
+              <CardTitle className="text-3xl font-bold text-foreground">{firebaseUser.name}</CardTitle>
+              <CardDescription className="text-muted-foreground mt-1">{firebaseUser.email}</CardDescription>
+              <p className="text-sm text-muted-foreground mt-0.5">{firebaseUser.joinDate}</p>
+              {firebaseUser.isCulturalUser && (
+                <p className="text-sm text-primary font-medium mt-1 flex items-center gap-1.5">
+                  <Award className="h-4 w-4" /> Cultural Contributor: {firebaseUser.culturalInterest}
+                </p>
+              )}
+            </div>
+            <Button variant="outline" size="sm" asChild className="border-primary text-primary hover:bg-primary/10">
+              <Link href="/my-page/settings"> 
+                  <Settings className="h-4 w-4 mr-2"/>Edit Profile
+              </Link>
+            </Button>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {userSharedRoutes.length > 0 ? userSharedRoutes.map(route => (
-              <div key={route.id} className="flex items-center justify-between gap-4 p-3 border border-border rounded-lg hover:bg-muted/20 transition-colors">
-                <div className="flex items-center gap-4 flex-grow">
-                   <RouteItemContent route={route} />
-                </div>
-                <div className="flex items-center gap-1">
-                  {route.googleMapsLink ? (
-                    <Button variant="ghost" size="icon" asChild>
-                      <a href={route.googleMapsLink} target="_blank" rel="noopener noreferrer" aria-label={`View map for ${route.title}`}>
-                        <Eye className="h-5 w-5 text-muted-foreground hover:text-primary" />
-                      </a>
-                    </Button>
-                  ) : (
-                    <Button variant="ghost" size="icon" asChild>
+        </Card>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card className="lg:col-span-2 rounded-xl shadow-md">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-xl"><Route className="h-6 w-6 text-primary" />My Shared Routes</CardTitle>
+              <CardDescription>Manage routes you've created and shared.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {(userSharedRoutes.length > 0 || !firebaseUser.isNewUser) && userSharedRoutes.map(route => (
+                <div key={route.id} className="flex items-center justify-between gap-4 p-3 border border-border rounded-lg hover:bg-muted/20 transition-colors">
+                  <div className="flex items-center gap-4 flex-grow min-w-0"> {/* Added min-w-0 for flex-grow to work properly with ellipsis */}
+                    <RouteItemContent route={route} />
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0"> {/* Added flex-shrink-0 */}
+                    <Button variant="outline" size="sm" asChild className="border-primary text-primary hover:bg-primary hover:text-primary-foreground">
                       <Link href={`/route/${route.id}`} aria-label={`View details for ${route.title}`}>
-                        <Eye className="h-5 w-5 text-muted-foreground hover:text-primary" />
+                        View Route
                       </Link>
                     </Button>
-                  )}
-                  <Button variant="ghost" size="icon" asChild>
-                    <Link href={`/create?edit=${route.id}`} aria-label={`Edit details for ${route.title}`}> 
-                        <Edit3 className="h-5 w-5 text-muted-foreground hover:text-primary" />
+                    {route.googleMapsLink && (
+                      <Button variant="ghost" size="icon" asChild>
+                        <a href={route.googleMapsLink} target="_blank" rel="noopener noreferrer" aria-label={`View map for ${route.title}`}>
+                          <Eye className="h-5 w-5 text-muted-foreground hover:text-primary" />
+                        </a>
+                      </Button>
+                    )}
+                    <Button variant="ghost" size="icon" asChild>
+                      <Link href={`/create?edit=${route.id}`} aria-label={`Edit details for ${route.title}`}> 
+                          <Edit3 className="h-5 w-5 text-muted-foreground hover:text-primary" />
+                      </Link>
+                    </Button>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" size="icon" onClick={() => setRouteToDelete(route)} aria-label={`Delete ${route.title}`}>
+                          <Trash2 className="h-5 w-5 text-muted-foreground hover:text-destructive" />
+                      </Button>
+                    </AlertDialogTrigger>
+                  </div>
+                </div>
+              ))}
+              {firebaseUser.isNewUser && userSharedRoutes.length === 0 && (
+                <div className="text-center py-6 px-4 border-2 border-dashed border-border rounded-lg bg-muted/20">
+                  <Compass className="h-12 w-12 text-primary mx-auto mb-3" />
+                  <h3 className="text-lg font-semibold text-foreground mb-1">Share Your First Route!</h3>
+                  <p className="text-muted-foreground text-sm mb-4">
+                    Welcome to Culture Compass! Ready to share your cultural discoveries or favorite local paths? Create your first route and inspire others.
+                  </p>
+                  <Button asChild className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                    <Link href="/create">
+                      <Route className="h-4 w-4 mr-2" /> Create New Route
                     </Link>
                   </Button>
-                  
-                  <Button variant="ghost" size="icon" onClick={() => setRouteToDelete(route)} aria-label={`Delete ${route.title}`}>
-                      <Trash2 className="h-5 w-5 text-muted-foreground hover:text-destructive" />
+                </div>
+              )}
+              {!firebaseUser.isNewUser && userSharedRoutes.length === 0 && (
+                  <div className="text-center py-6 px-4 border-2 border-dashed border-border rounded-lg bg-muted/20">
+                      <Compass className="h-12 w-12 text-primary mx-auto mb-3" />
+                      <h3 className="text-lg font-semibold text-foreground mb-1">No Routes Shared Yet</h3>
+                      <p className="text-muted-foreground text-sm mb-4">
+                      Share your cultural discoveries or favorite local paths to inspire others!
+                      </p>
+                      <Button asChild className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                      <Link href="/create">
+                          <Route className="h-4 w-4 mr-2" /> Create New Route
+                      </Link>
+                      </Button>
+                  </div>
+              )}
+              {userSharedRoutes.length > 0 && (
+                  <Button variant="outline" asChild className="mt-4 border-primary text-primary hover:bg-primary/10 w-full sm:w-auto">
+                      <Link href="/create"><Route className="h-4 w-4 mr-2"/>Share or Create More Routes</Link>
+                  </Button>
+              )}
+            </CardContent>
+          </Card>
+
+          {firebaseUser.isCulturalUser && mockRewards.length > 0 && (
+            <Card className="rounded-xl shadow-md">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-xl"><Gift className="h-6 w-6 text-accent" />My Cultural Rewards</CardTitle>
+                <CardDescription>Coupons and services you can offer for your cultural routes.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {mockRewards.map(reward => (
+                  <div key={reward.id} className="p-3 border border-border rounded-lg bg-background hover:shadow-sm transition-shadow">
+                    <Image src={reward.imageUrl} alt={reward.title} width={300} height={150} className="rounded-md object-cover w-full h-24 mb-2" data-ai-hint={reward.imageHint} />
+                    <h3 className="font-semibold text-foreground text-sm">{reward.title}</h3>
+                    <p className="text-xs text-muted-foreground">Provider: {reward.culturalProvider}</p>
+                    <p className="text-xs text-muted-foreground">Expires: {reward.expiry}</p>
+                    <Button variant="link" size="sm" className="p-0 h-auto text-accent hover:text-accent/80 mt-1">Manage Reward</Button>
+                  </div>
+                ))}
+                <Button variant="outline" className="mt-2 w-full border-accent text-accent hover:bg-accent/10">
+                  <Gift className="h-4 w-4 mr-2"/>Add New Reward
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        <Card className="rounded-xl shadow-md">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-xl"><ListChecks className="h-6 w-6 text-primary" />My Activity</CardTitle>
+            <CardDescription>A log of routes you've traveled and your contributions.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <h3 className="text-lg font-semibold text-foreground mb-3">Traveled Routes</h3>
+            {(firebaseUser.isNewUser || mockTraveledRoutes.length === 0) ? (
+                <div className="text-center py-6 px-4 border-2 border-dashed border-border rounded-lg bg-muted/20">
+                  <ListChecks className="h-12 w-12 text-primary mx-auto mb-3" />
+                  <h3 className="text-lg font-semibold text-foreground mb-1">Start Your Adventures!</h3>
+                  <p className="text-muted-foreground text-sm mb-4">Explore captivating routes, mark them as 'traveled', and build your personal journey log.</p>
+                  <Button asChild variant="default" className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                      <Link href="/discover">
+                          <Compass className="h-4 w-4 mr-2" />
+                          Discover Routes
+                      </Link>
                   </Button>
                 </div>
-              </div>
-            )) : (
-               <div className="text-center py-6 px-4 border-2 border-dashed border-border rounded-lg bg-muted/20">
-                <Compass className="h-12 w-12 text-primary mx-auto mb-3" />
-                <h3 className="text-lg font-semibold text-foreground mb-1">No Routes Shared Yet</h3>
-                <p className="text-muted-foreground text-sm mb-4">
-                  Ready to share your cultural discoveries or favorite local paths? Create your first route and inspire others!
-                </p>
-                <Button asChild className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                  <Link href="/create">
-                    <Route className="h-4 w-4 mr-2" /> Create New Route
-                  </Link>
-                </Button>
+              ) : (
+                  <div className="space-y-4 mb-6">
+                  {mockTraveledRoutes.map(route => (
+                  <div key={route.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-3 border border-border rounded-lg hover:bg-muted/20 transition-colors">
+                      <Image src={route.imageUrl} alt={route.title} width={120} height={80} className="rounded-md object-cover" data-ai-hint={route.imageHint} />
+                      <div className="flex-grow">
+                      <Link href={`/route/${route.id}`} className="font-semibold text-foreground hover:text-primary hover:underline">{route.title}</Link>
+                      <p className="text-xs text-muted-foreground">Completed: {route.completedDate}</p>
+                      <div className="flex items-center mt-1">
+                          <span className="text-xs text-muted-foreground mr-1">Your rating:</span>
+                          {[...Array(5)].map((_, i) => (
+                          <Star key={i} className={`h-4 w-4 ${i < (route.myRating || 0) ? 'text-accent fill-accent' : 'text-muted-foreground/50'}`} />
+                          ))}
+                      </div>
+                      </div>
+                      <Button variant="outline" size="sm" asChild className="mt-2 sm:mt-0">
+                      <Link href={`/route/${route.id}#feedback`}>
+                          <MessageSquare className="h-4 w-4 mr-2" /> View/Edit Feedback
+                      </Link>
+                      </Button>
+                  </div>
+                  ))}
               </div>
             )}
-             {userSharedRoutes.length > 0 && (
-                <Button variant="outline" asChild className="mt-4 border-primary text-primary hover:bg-primary/10 w-full sm:w-auto">
-                    <Link href="/create"><Route className="h-4 w-4 mr-2"/>Share or Create More Routes</Link>
-                </Button>
-             )}
+            
+            <h3 className="text-lg font-semibold text-foreground mb-3 mt-6 border-t pt-6">My Comments & Ratings</h3>
+            { (firebaseUser.isNewUser || (!firebaseUser.isNewUser && currentCommentsCount === 0 )) ? (
+              <div className="text-center py-6 px-4 border-2 border-dashed border-border rounded-lg bg-muted/20 mt-4">
+                  <MessageSquare className="h-12 w-12 text-primary mx-auto mb-3" />
+                  <h3 className="text-lg font-semibold text-foreground mb-1">Share Your Thoughts!</h3>
+                  <p className="text-muted-foreground text-sm mb-4">
+                      After you travel a route, come back to its page to leave comments and ratings. Your feedback helps the community!
+                  </p>
+                  <Button asChild variant="default" className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                      <Link href="/discover">
+                          <Compass className="h-4 w-4 mr-2" />
+                          Find a Route to Review
+                      </Link>
+                  </Button>
+              </div>
+            ) : (
+              <>
+                <p className="text-muted-foreground text-sm">
+                  This section will show your specific comments and ratings across various routes.
+                </p>
+                {/* Example of a comment - replace with actual data mapping if available */}
+                <div className="mt-4 p-3 border border-border rounded-lg bg-background">
+                  <p className="text-sm text-foreground">On <Link href="/route/mock-1" className="font-medium text-primary hover:underline">Ancient Temple Trail</Link>:</p>
+                  <div className="flex items-center my-1">
+                      {[...Array(5)].map((_, i) => (
+                        <Star key={i} className={`h-4 w-4 ${i < 5 ? 'text-accent fill-accent' : 'text-muted-foreground/50'}`} />
+                      ))}
+                  </div>
+                  <p className="text-sm italic text-muted-foreground">"Absolutely breathtaking views and so much history. A must-do!" - 2 weeks ago</p>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
 
-        {firebaseUser.isCulturalUser && mockRewards.length > 0 && (
-          <Card className="rounded-xl shadow-md">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-xl"><Gift className="h-6 w-6 text-accent" />My Cultural Rewards</CardTitle>
-              <CardDescription>Coupons and services you can offer for your cultural routes.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {mockRewards.map(reward => (
-                <div key={reward.id} className="p-3 border border-border rounded-lg bg-background hover:shadow-sm transition-shadow">
-                  <Image src={reward.imageUrl} alt={reward.title} width={300} height={150} className="rounded-md object-cover w-full h-24 mb-2" data-ai-hint={reward.imageHint} />
-                  <h3 className="font-semibold text-foreground text-sm">{reward.title}</h3>
-                  <p className="text-xs text-muted-foreground">Provider: {reward.culturalProvider}</p>
-                  <p className="text-xs text-muted-foreground">Expires: {reward.expiry}</p>
-                  <Button variant="link" size="sm" className="p-0 h-auto text-accent hover:text-accent/80 mt-1">Manage Reward</Button>
-                </div>
-              ))}
-               <Button variant="outline" className="mt-2 w-full border-accent text-accent hover:bg-accent/10">
-                <Gift className="h-4 w-4 mr-2"/>Add New Reward
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-
-      <Card className="rounded-xl shadow-md">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-xl"><ListChecks className="h-6 w-6 text-primary" />My Activity</CardTitle>
-          <CardDescription>A log of routes you've traveled and your contributions.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <h3 className="text-lg font-semibold text-foreground mb-3">Traveled Routes</h3>
-          <div className="space-y-4 mb-6">
-            {mockTraveledRoutes.length > 0 ? mockTraveledRoutes.map(route => (
-               <div key={route.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-3 border border-border rounded-lg hover:bg-muted/20 transition-colors">
-                <Image src={route.imageUrl} alt={route.title} width={120} height={80} className="rounded-md object-cover" data-ai-hint={route.imageHint} />
-                <div className="flex-grow">
-                  <Link href={`/route/${route.id}`} className="font-semibold text-foreground hover:text-primary hover:underline">{route.title}</Link>
-                  <p className="text-xs text-muted-foreground">Completed: {route.completedDate}</p>
-                  <div className="flex items-center mt-1">
-                    <span className="text-xs text-muted-foreground mr-1">Your rating:</span>
-                    {[...Array(5)].map((_, i) => (
-                      <Star key={i} className={`h-4 w-4 ${i < (route.myRating || 0) ? 'text-accent fill-accent' : 'text-muted-foreground/50'}`} />
-                    ))}
-                  </div>
-                </div>
-                <Button variant="outline" size="sm" asChild className="mt-2 sm:mt-0">
-                  <Link href={`/route/${route.id}#feedback`}>
-                    <MessageSquare className="h-4 w-4 mr-2" /> View/Edit Feedback
-                  </Link>
-                </Button>
-              </div>
-            )) : (
-              <div className="text-center py-6 px-4 border-2 border-dashed border-border rounded-lg bg-muted/20">
-                <ListChecks className="h-12 w-12 text-primary mx-auto mb-3" />
-                <h3 className="text-lg font-semibold text-foreground mb-1">No Adventures Logged Yet</h3>
-                <p className="text-muted-foreground text-sm mb-4">Explore captivating routes, mark them as 'traveled', and build your personal journey log.</p>
-                <Button asChild variant="default" className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                    <Link href="/discover">
-                        <Compass className="h-4 w-4 mr-2" />
-                        Discover Routes
-                    </Link>
-                </Button>
-              </div>
-            )}
-          </div>
-          
-          <h3 className="text-lg font-semibold text-foreground mb-3 mt-6 border-t pt-6">My Comments & Ratings</h3>
-          { (firebaseUser?.isNewUser || (!firebaseUser?.isNewUser && mockTraveledRoutes.length === 0 )) && currentCommentsCount === 0 ? (
-             <div className="text-center py-6 px-4 border-2 border-dashed border-border rounded-lg bg-muted/20 mt-4">
-                <MessageSquare className="h-12 w-12 text-primary mx-auto mb-3" />
-                <h3 className="text-lg font-semibold text-foreground mb-1">Share Your Thoughts!</h3>
-                <p className="text-muted-foreground text-sm mb-4">
-                    After you travel a route, come back to its page to leave comments and ratings. Your feedback helps the community!
-                </p>
-                 <Button asChild variant="default" className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                    <Link href="/discover">
-                        <Compass className="h-4 w-4 mr-2" />
-                        Find a Route to Review
-                    </Link>
-                </Button>
-            </div>
-          ) : (
-            <>
-              <p className="text-muted-foreground text-sm">
-                This section will show your specific comments and ratings across various routes.
-              </p>
-              <div className="mt-4 p-3 border border-border rounded-lg bg-background">
-                <p className="text-sm text-foreground">On <Link href="/route/mock-1" className="font-medium text-primary hover:underline">Ancient Temple Trail</Link>:</p>
-                <div className="flex items-center my-1">
-                    {[...Array(5)].map((_, i) => (
-                      <Star key={i} className={`h-4 w-4 ${i < 5 ? 'text-accent fill-accent' : 'text-muted-foreground/50'}`} />
-                    ))}
-                </div>
-                <p className="text-sm italic text-muted-foreground">"Absolutely breathtaking views and so much history. A must-do!" - 2 weeks ago</p>
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      <AlertDialog open={!!routeToDelete} onOpenChange={(isOpen) => { if (!isOpen) setRouteToDelete(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure you want to delete this route?</AlertDialogTitle>
@@ -380,8 +423,3 @@ export default function MyPage() {
     </div>
   );
 }
-
-// Placeholder for comment count, replace with actual logic if available
-const currentCommentsCount = 1; 
-    
-
