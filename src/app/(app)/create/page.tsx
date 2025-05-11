@@ -1,13 +1,13 @@
 
 "use client";
 
-import { useState, type FormEvent, useEffect } from 'react';
+import { useState, type FormEvent, useEffect, ChangeEvent } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Share2, Route, Info, ExternalLink, Map, Lightbulb } from "lucide-react";
+import { Share2, Route, Info, ExternalLink, Map, Lightbulb, ImagePlus, Trash2 } from "lucide-react";
 import Image from "next/image";
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
@@ -29,7 +29,6 @@ interface SharedRoute {
   isCulturalRoute: boolean;
   startPoint: string;
   googleMapsLink?: string;
-  // mapPosition?: { top: string; left: string }; // mapPosition is hard to generate client-side
 }
 
 const SHARED_ROUTES_LS_KEY = 'userSharedRoutes';
@@ -37,17 +36,20 @@ const SHARED_ROUTES_LS_KEY = 'userSharedRoutes';
 export default function CreatePage() {
   const [mode, setMode] = useState<CreateMode>('options');
   const [googleMapsLink, setGoogleMapsLink] = useState('');
-  const [routePreview, setRoutePreview] = useState<string | null>(null);
   const [routeName, setRouteName] = useState('');
   const [routeDescription, setRouteDescription] = useState('');
   const [isCulturalRoute, setIsCulturalRoute] = useState(false);
+  const [uploadedImageDataUrl, setUploadedImageDataUrl] = useState<string | null>(null);
+  const [picsumPreviewUrl, setPicsumPreviewUrl] = useState<string | null>(null);
+
   const { toast } = useToast();
 
   // Effect to clear form state when mode changes back to options
   useEffect(() => {
     if (mode === 'options') {
       setGoogleMapsLink('');
-      setRoutePreview(null);
+      setPicsumPreviewUrl(null);
+      setUploadedImageDataUrl(null);
       setRouteName('');
       setRouteDescription('');
       setIsCulturalRoute(false);
@@ -60,7 +62,6 @@ export default function CreatePage() {
       try {
         const existingRoutesRaw = localStorage.getItem(SHARED_ROUTES_LS_KEY);
         const existingRoutes: SharedRoute[] = existingRoutesRaw ? JSON.parse(existingRoutesRaw) : [];
-        // Avoid adding duplicates by title, simplistic check
         if (existingRoutes.some(r => r.title === newRoute.title)) {
             toast({
                 variant: "destructive",
@@ -85,22 +86,65 @@ export default function CreatePage() {
   };
 
   const handleLinkPaste = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setGoogleMapsLink(e.target.value);
-    if (e.target.value.startsWith("https://maps.google.com/") || e.target.value.startsWith("https://www.google.com/maps/")) {
-      setRoutePreview(`https://picsum.photos/seed/${encodeURIComponent(e.target.value)}/600/300`);
-    } else {
-      setRoutePreview(null);
+    const link = e.target.value;
+    setGoogleMapsLink(link);
+    if (!uploadedImageDataUrl) { // Only set picsum if no custom image is uploaded
+      if (link.startsWith("https://maps.google.com/") || link.startsWith("https://www.google.com/maps/")) {
+        setPicsumPreviewUrl(`https://picsum.photos/seed/${encodeURIComponent(link)}/600/300`);
+      } else {
+        setPicsumPreviewUrl(null);
+      }
+    }
+  };
+
+  const handleImageUpload = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        toast({
+          variant: "destructive",
+          title: "Image too large",
+          description: "Please upload an image smaller than 5MB.",
+        });
+        event.target.value = ''; // Clear the input
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setUploadedImageDataUrl(reader.result as string);
+        setPicsumPreviewUrl(null); // Clear picsum preview if a custom image is uploaded
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeUploadedImage = () => {
+    setUploadedImageDataUrl(null);
+    // Restore picsum preview if link is valid
+    if (googleMapsLink.startsWith("https://maps.google.com/") || googleMapsLink.startsWith("https://www.google.com/maps/")) {
+      setPicsumPreviewUrl(`https://picsum.photos/seed/${encodeURIComponent(googleMapsLink)}/600/300`);
     }
   };
 
   const handleSubmitSharedRoute = (e: React.FormEvent) => {
     e.preventDefault();
+
+    let finalImageUrl = uploadedImageDataUrl || picsumPreviewUrl || `https://picsum.photos/seed/${encodeURIComponent(routeName || 'shared_route')}/600/400`;
+    let finalImageHint = "generic route image";
+
+    if (uploadedImageDataUrl) {
+      finalImageHint = "user uploaded";
+    } else if (picsumPreviewUrl) {
+      finalImageHint = "map preview";
+    }
+
+
     const newRoute: SharedRoute = {
       id: `user_shared_${Date.now()}`,
       title: routeName,
       description: routeDescription,
-      imageUrl: routePreview || `https://picsum.photos/seed/${encodeURIComponent(routeName)}/600/400`,
-      imageHint: "shared map route",
+      imageUrl: finalImageUrl,
+      imageHint: finalImageHint,
       tags: isCulturalRoute ? ["Cultural", "Shared Map"] : ["Shared Map"],
       rating: null,
       reviews: 0,
@@ -116,7 +160,7 @@ export default function CreatePage() {
             title: "Route Shared!",
             description: `${routeName} has been added to your local shared routes.`,
         });
-        setMode('options');
+        setMode('options'); // Resets form via useEffect
     }
   };
   
@@ -126,7 +170,7 @@ export default function CreatePage() {
       id: `user_created_${Date.now()}`,
       title: routeName,
       description: routeDescription,
-      imageUrl: `https://picsum.photos/seed/${encodeURIComponent(routeName)}/600/400`,
+      imageUrl: `https://picsum.photos/seed/${encodeURIComponent(routeName || 'custom_route')}/600/400`,
       imageHint: "custom community route",
       tags: isCulturalRoute ? ["Cultural", "Custom"] : ["Custom"],
       rating: null,
@@ -142,9 +186,12 @@ export default function CreatePage() {
             title: "Route Created!",
             description: `${routeName} has been added to your local routes.`,
         });
-        setMode('options');
+        setMode('options'); // Resets form via useEffect
     }
   };
+
+  const currentPreviewUrl = uploadedImageDataUrl || picsumPreviewUrl;
+
 
   if (mode === 'options') {
     return (
@@ -160,7 +207,7 @@ export default function CreatePage() {
                 <Share2 className="h-6 w-6 text-primary" /> Share Existing Route
               </CardTitle>
               <CardDescription>
-                Already have a route planned on Google Maps? Share the link here.
+                Already have a route planned on Google Maps? Share the link and optionally add your own image.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -195,7 +242,7 @@ export default function CreatePage() {
         <header className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-foreground">Share Google Maps Route</h1>
-            <p className="text-muted-foreground">Paste your Google Maps route link below.</p>
+            <p className="text-muted-foreground">Paste your Google Maps route link and add details.</p>
           </div>
           <Button variant="outline" onClick={() => setMode('options')}>Back to Options</Button>
         </header>
@@ -236,12 +283,35 @@ export default function CreatePage() {
                   className="py-3"
                 />
               </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="routeImage" className="text-base">Route Image (Optional)</Label>
+                <Input 
+                  id="routeImage" 
+                  type="file" 
+                  accept="image/*" 
+                  onChange={handleImageUpload}
+                  className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                />
+                <p className="text-xs text-muted-foreground">Max file size: 5MB. Replaces map preview if uploaded.</p>
+              </div>
 
-              {routePreview && (
+              {currentPreviewUrl && (
                 <div className="space-y-2">
                   <Label className="text-base">Route Preview</Label>
-                  <div className="border border-border rounded-lg overflow-hidden aspect-video">
-                    <Image src={routePreview} alt="Route Preview" width={600} height={300} className="object-cover w-full h-full" data-ai-hint="map preview" />
+                  <div className="border border-border rounded-lg overflow-hidden aspect-video relative group">
+                    <Image src={currentPreviewUrl} alt="Route Preview" width={600} height={300} className="object-cover w-full h-full" data-ai-hint={uploadedImageDataUrl ? "user uploaded image" : "map preview"} />
+                    {uploadedImageDataUrl && (
+                      <Button 
+                        variant="destructive" 
+                        size="icon" 
+                        onClick={removeUploadedImage} 
+                        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                        aria-label="Remove uploaded image"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               )}
@@ -291,13 +361,13 @@ export default function CreatePage() {
               <li>Open <a href="https://www.google.com/maps" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">Google Maps <ExternalLink className="inline h-4 w-4"/></a> in a new tab or its app.</li>
               <li>Plan your route by adding desired waypoints and spots.</li>
               <li>Once your route is finalized, generate a shareable link for it.</li>
-              <li>Come back here and choose "Share Existing Route" to submit your link.</li>
+              <li>Come back here and choose "Share Existing Route" to submit your link. You'll be able to add a custom image too!</li>
             </ol>
             
-            <Card className="bg-primary/5 border-primary/20 shadow-sm rounded-lg">
+            <Card className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border-l-4 border-primary shadow-sm rounded-lg mt-6">
               <CardContent className="p-6">
                 <div className="flex items-start gap-4">
-                  <Lightbulb className="h-8 w-8 text-primary mt-1 flex-shrink-0" />
+                  <Lightbulb className="h-10 w-10 text-primary mt-1 flex-shrink-0" />
                   <div>
                     <h4 className="font-semibold text-primary text-lg">Pro Tip: Adding Detail</h4>
                     <p className="text-sm text-foreground/80 mt-1">
@@ -307,6 +377,7 @@ export default function CreatePage() {
                 </div>
               </CardContent>
             </Card>
+
 
             <p className="text-muted-foreground pt-4">
               Alternatively, you can describe your route below. Providing a Google Maps link is preferred for accuracy if possible.
@@ -356,3 +427,4 @@ export default function CreatePage() {
 
   return null; // Should not happen
 }
+
