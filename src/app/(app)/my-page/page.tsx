@@ -55,17 +55,27 @@ export default function MyPage() {
       // Ensure storedRoutes are parsed as an array of MySharedRoute compatible objects
       const storedRoutes: Partial<MySharedRoute>[] = storedRoutesRaw ? JSON.parse(storedRoutesRaw) : [];
       
-      setUserSharedRoutes(storedRoutes.map(route => ({
+      const mappedRoutes = storedRoutes.map(route => ({
         id: route.id || `fallback_id_${Math.random()}`, // provide fallback id
         title: route.title || "Untitled Route", // provide fallback title
         imageUrl: route.imageUrl || "https://picsum.photos/seed/default/100/66", // provide fallback image
         imageHint: route.imageHint || "route image",
         googleMapsLink: route.googleMapsLink,
-        status: "Shared (Local)", 
+        status: "Shared (Local)" as "Shared (Local)", 
         views: route.views || 0,
         rating: route.rating === undefined ? null : route.rating,
         description: route.description || "",
-      })));
+      }));
+
+      // Sort routes by creation date (newest first)
+      // Assumes ID format like 'user_shared_TIMESTAMP' or 'user_created_TIMESTAMP'
+      mappedRoutes.sort((a, b) => {
+        const timestampA = parseInt(a.id.split('_').pop() || '0', 10);
+        const timestampB = parseInt(b.id.split('_').pop() || '0', 10);
+        return timestampB - timestampA; // Sort in descending order
+      });
+      
+      setUserSharedRoutes(mappedRoutes);
     }
     setIsLoadingSharedRoutes(false);
   }, []);
@@ -122,11 +132,17 @@ export default function MyPage() {
               </div>
             ) : userSharedRoutes.length > 0 ? userSharedRoutes.map(route => (
               <div key={route.id} className="flex items-center justify-between gap-4 p-3 border border-border rounded-lg hover:bg-muted/20 transition-colors">
-                <Link href={`/route/${route.id}`} passHref legacyBehavior>
-                  <a className="flex items-center gap-4 flex-grow no-underline text-current cursor-pointer" aria-label={`View details for ${route.title}`}>
-                      <RouteItemContent route={route} />
+                {route.googleMapsLink ? (
+                  <a href={route.googleMapsLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 flex-grow no-underline text-current cursor-pointer" aria-label={`View map for ${route.title}`}>
+                     <RouteItemContent route={route} />
                   </a>
-                </Link>
+                ) : (
+                  <Link href={`/route/${route.id}`} passHref legacyBehavior>
+                    <a className="flex items-center gap-4 flex-grow no-underline text-current cursor-pointer" aria-label={`View details for ${route.title}`}>
+                        <RouteItemContent route={route} />
+                    </a>
+                  </Link>
+                )}
                 <Button variant="ghost" size="icon" asChild TooltipContent="Edit route details">
                   {/* This could also link to a specific edit page e.g. /create/${route.id}/edit or similar */}
                   <Link href={`/route/${route.id}`} aria-label={`Edit details for ${route.title}`}> 
