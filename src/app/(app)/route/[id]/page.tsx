@@ -312,30 +312,45 @@ export default function RouteDetailPage() {
             {route.tags.map(tag => <Badge key={tag} variant="secondary">{tag}</Badge>)}
           </div>
 
-          {route.googleMapsLink && (
-             <div className="my-6">
-                <a 
-                    href={route.googleMapsLink} 
-                    target="_blank" 
-                    rel="noopener noreferrer" 
-                    className="inline-flex items-center gap-2 text-primary hover:underline font-medium text-sm mb-3"
-                >
-                    <ExternalLink className="h-4 w-4"/> View Full Map on Google Maps
-                </a>
-                <div className="aspect-video rounded-lg overflow-hidden border border-border shadow-md">
-                    <iframe
-                    src={route.googleMapsLink.replace("/maps/", "/maps/embed/")} // Basic attempt to convert to embeddable link if possible
-                    width="100%"
-                    height="100%"
-                    style={{ border:0 }}
-                    allowFullScreen={true}
-                    loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade"
-                    title={`Map of ${route.title}`}
-                    ></iframe>
-                </div>
-            </div>
-          )}
+          {route.googleMapsLink && (() => {
+            let embedSrc = route.googleMapsLink; 
+            if (route.googleMapsLink.includes("/maps/d/viewer")) {
+              embedSrc = route.googleMapsLink.replace("/maps/d/viewer", "/maps/d/embed");
+            } else if (route.googleMapsLink.includes("/maps/d/edit")) {
+              embedSrc = route.googleMapsLink.replace("/maps/d/edit", "/maps/d/embed");
+            } else if (route.googleMapsLink.includes("/maps/embed/")) {
+              // Already an embed link
+              embedSrc = route.googleMapsLink;
+            } else if (route.googleMapsLink.includes("/maps/")) {
+              embedSrc = route.googleMapsLink.replace("/maps/", "/maps/embed/");
+            }
+            // If none of the conditions match, embedSrc remains the original link.
+
+            return (
+              <div className="my-6">
+                  <a 
+                      href={route.googleMapsLink} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="inline-flex items-center gap-2 text-primary hover:underline font-medium text-sm mb-3"
+                  >
+                      <ExternalLink className="h-4 w-4"/> View Full Map on Google Maps
+                  </a>
+                  <div className="aspect-video rounded-lg overflow-hidden border border-border shadow-md">
+                      <iframe
+                      src={embedSrc}
+                      width="100%"
+                      height="100%"
+                      style={{ border:0 }}
+                      allowFullScreen={true}
+                      loading="lazy"
+                      referrerPolicy="no-referrer-when-downgrade"
+                      title={`Map of ${route.title}`}
+                      ></iframe>
+                  </div>
+              </div>
+            );
+          })()}
           
           <Separator className="my-6" />
           <h2 className="text-xl font-semibold text-foreground mb-3">About this Route</h2>
