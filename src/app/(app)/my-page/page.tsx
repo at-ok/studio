@@ -1,11 +1,10 @@
-
 "use client";
 
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ListChecks, Route, MessageSquare, Star, Award, Edit3, Gift, Settings, Loader2, Trash2 } from "lucide-react";
+import { ListChecks, Route, MessageSquare, Star, Award, Edit3, Gift, Settings, Loader2, Trash2, Eye } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -20,6 +19,10 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
+import { getAuth, onAuthStateChanged, type User } from "firebase/auth";
+import { auth as firebaseAuth } from "@/lib/firebase"; // Assuming firebaseAuth is exported from firebase.ts
+import { useRouter } from 'next/navigation';
+
 
 // Consistent Route structure
 interface MySharedRoute {
@@ -36,17 +39,6 @@ interface MySharedRoute {
 
 const SHARED_ROUTES_LS_KEY = 'userSharedRoutes';
 
-// Mock data for user, traveled routes, and rewards (these are not affected by localStorage shared routes)
-const mockUser = {
-  name: "Alex Wanderer",
-  email: "alex.wanderer@example.com",
-  avatarUrl: "https://picsum.photos/seed/user_alex/200/200",
-  avatarHint: "user avatar",
-  joinDate: "Joined March 2023",
-  isCulturalUser: true,
-  culturalInterest: "Traditional Pottery & Local Crafts",
-};
-
 const mockTraveledRoutes = [
   { id: "tr1", title: "Ancient Temple Trail", completedDate: "2024-05-10", myRating: 5, imageUrl: "https://picsum.photos/seed/temple_traveled/300/200", imageHint: "temple detail" },
   { id: "tr2", title: "Urban Art Walk", completedDate: "2024-04-22", myRating: 4, imageUrl: "https://picsum.photos/seed/art_traveled/300/200", imageHint: "graffiti wall" },
@@ -58,11 +50,45 @@ const mockRewards = [
 
 
 export default function MyPage() {
+  const [user, setUser] = useState<User | null>(null);
+  const [firebaseUser, setFirebaseUser] = useState<any | null>(null); // For Firestore user data
   const [userSharedRoutes, setUserSharedRoutes] = useState<MySharedRoute[]>([]);
-  const [isLoadingSharedRoutes, setIsLoadingSharedRoutes] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [routeToDelete, setRouteToDelete] = useState<MySharedRoute | null>(null);
+
   const { toast } = useToast();
+  const router = useRouter();
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(firebaseAuth, async (currentUser) => {
+      if (currentUser) {
+        setUser(currentUser);
+        // TODO: Fetch user profile data from Firestore based on currentUser.uid
+        // For now, using a mock or assuming basic info from auth
+        setFirebaseUser({
+            name: currentUser.displayName || "User",
+            email: currentUser.email || "No email",
+            avatarUrl: currentUser.photoURL || `https://picsum.photos/seed/${currentUser.uid}/200/200`,
+            avatarHint: "user avatar",
+            joinDate: `Joined ${currentUser.metadata.creationTime ? new Date(currentUser.metadata.creationTime).toLocaleDateString() : 'recently'}`,
+            // These would come from Firestore
+            // isCulturalUser: false, 
+            // culturalInterest: "",
+        });
+        fetchSharedRoutes();
+      } else {
+        setUser(null);
+        setFirebaseUser(null);
+        router.push('/auth/signin'); // Redirect if not signed in
+      }
+      setIsLoading(false);
+    });
+    return () => unsubscribe();
+  }, [router]);
+
 
   const fetchSharedRoutes = () => {
+    setIsLoading(true);
     if (typeof window !== 'undefined') {
       const storedRoutesRaw = localStorage.getItem(SHARED_ROUTES_LS_KEY);
       const storedRoutes: Partial<MySharedRoute>[] = storedRoutesRaw ? JSON.parse(storedRoutesRaw) : [];
@@ -87,36 +113,33 @@ export default function MyPage() {
       
       setUserSharedRoutes(mappedRoutes);
     }
-    setIsLoadingSharedRoutes(false);
+    setIsLoading(false);
   };
 
-  useEffect(() => {
-    fetchSharedRoutes();
-  }, []);
+  const handleDeleteSharedRoute = () => {
+    if (!routeToDelete || typeof window === 'undefined') return;
 
-  const handleDeleteSharedRoute = (routeId: string) => {
-    if (typeof window !== 'undefined') {
-      try {
-        const existingRoutesRaw = localStorage.getItem(SHARED_ROUTES_LS_KEY);
-        let existingRoutes: MySharedRoute[] = existingRoutesRaw ? JSON.parse(existingRoutesRaw) : [];
-        existingRoutes = existingRoutes.filter(route => route.id !== routeId);
-        localStorage.setItem(SHARED_ROUTES_LS_KEY, JSON.stringify(existingRoutes));
-        
-        // Update state to reflect deletion
-        setUserSharedRoutes(prevRoutes => prevRoutes.filter(route => route.id !== routeId));
-        
-        toast({
-          title: "Route Deleted",
-          description: "The shared route has been successfully deleted.",
-        });
-      } catch (error) {
-        console.error("Error deleting route from localStorage:", error);
-        toast({
-          variant: "destructive",
-          title: "Deletion Error",
-          description: "Could not delete the route. Please try again.",
-        });
-      }
+    try {
+      const existingRoutesRaw = localStorage.getItem(SHARED_ROUTES_LS_KEY);
+      let existingRoutes: MySharedRoute[] = existingRoutesRaw ? JSON.parse(existingRoutesRaw) : [];
+      existingRoutes = existingRoutes.filter(route => route.id !== routeToDelete.id);
+      localStorage.setItem(SHARED_ROUTES_LS_KEY, JSON.stringify(existingRoutes));
+      
+      setUserSharedRoutes(prevRoutes => prevRoutes.filter(route => route.id !== routeToDelete.id));
+      
+      toast({
+        title: "Route Deleted",
+        description: `The route "${routeToDelete.title}" has been successfully deleted.`,
+      });
+    } catch (error) {
+      console.error("Error deleting route from localStorage:", error);
+      toast({
+        variant: "destructive",
+        title: "Deletion Error",
+        description: "Could not delete the route. Please try again.",
+      });
+    } finally {
+      setRouteToDelete(null); // Close dialog
     }
   };
 
@@ -135,85 +158,77 @@ export default function MyPage() {
     </>
   );
 
+  if (isLoading || !user || !firebaseUser) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-200px)]">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="ml-2 text-muted-foreground">Loading your page...</p>
+      </div>
+    );
+  }
+
+
   return (
     <div className="space-y-8">
       <Card className="overflow-hidden rounded-xl shadow-lg">
         <CardHeader className="bg-muted/30 p-6 flex flex-col md:flex-row items-start md:items-center gap-6">
           <Avatar className="h-24 w-24 border-4 border-primary shadow-md">
-            <AvatarImage src={mockUser.avatarUrl} alt={mockUser.name} data-ai-hint={mockUser.avatarHint} />
-            <AvatarFallback className="text-3xl">{mockUser.name.charAt(0)}</AvatarFallback>
+            <AvatarImage src={firebaseUser.avatarUrl} alt={firebaseUser.name} data-ai-hint={firebaseUser.avatarHint} />
+            <AvatarFallback className="text-3xl">{firebaseUser.name.charAt(0)}</AvatarFallback>
           </Avatar>
           <div className="flex-grow">
-            <CardTitle className="text-3xl font-bold text-foreground">{mockUser.name}</CardTitle>
-            <CardDescription className="text-muted-foreground mt-1">{mockUser.email}</CardDescription>
-            <p className="text-sm text-muted-foreground mt-0.5">{mockUser.joinDate}</p>
-            {mockUser.isCulturalUser && (
+            <CardTitle className="text-3xl font-bold text-foreground">{firebaseUser.name}</CardTitle>
+            <CardDescription className="text-muted-foreground mt-1">{firebaseUser.email}</CardDescription>
+            <p className="text-sm text-muted-foreground mt-0.5">{firebaseUser.joinDate}</p>
+            {firebaseUser.isCulturalUser && (
               <p className="text-sm text-primary font-medium mt-1 flex items-center gap-1.5">
-                <Award className="h-4 w-4" /> Cultural Contributor: {mockUser.culturalInterest}
+                <Award className="h-4 w-4" /> Cultural Contributor: {firebaseUser.culturalInterest}
               </p>
             )}
           </div>
           <Button variant="outline" size="sm" asChild className="border-primary text-primary hover:bg-primary/10">
-            <Link href="/my-page/settings"><Settings className="h-4 w-4 mr-2"/>Edit Profile</Link>
+            {/* TODO: Link to actual settings page */}
+            <Link href="#"><Settings className="h-4 w-4 mr-2"/>Edit Profile</Link>
           </Button>
         </CardHeader>
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Shared Routes Section */}
         <Card className="lg:col-span-2 rounded-xl shadow-md">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-xl"><Route className="h-6 w-6 text-primary" />My Shared Routes</CardTitle>
-            <CardDescription>Manage routes you've created and shared. Click a route to view its details or map.</CardDescription>
+            <CardDescription>Manage routes you've created and shared.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {isLoadingSharedRoutes ? (
-              <div className="flex items-center justify-center p-4">
-                <Loader2 className="h-6 w-6 animate-spin text-primary mr-2"/> Loading your shared routes...
-              </div>
-            ) : userSharedRoutes.length > 0 ? userSharedRoutes.map(route => (
+            {userSharedRoutes.length > 0 ? userSharedRoutes.map(route => (
               <div key={route.id} className="flex items-center justify-between gap-4 p-3 border border-border rounded-lg hover:bg-muted/20 transition-colors">
-                {route.googleMapsLink ? (
-                  <a href={route.googleMapsLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 flex-grow no-underline text-current cursor-pointer" aria-label={`View map for ${route.title}`}>
-                     <RouteItemContent route={route} />
-                  </a>
-                ) : (
-                  <Link href={`/route/${route.id}`} passHref legacyBehavior>
-                    <a className="flex items-center gap-4 flex-grow no-underline text-current cursor-pointer" aria-label={`View details for ${route.title}`}>
-                        <RouteItemContent route={route} />
-                    </a>
-                  </Link>
-                )}
+                <div className="flex items-center gap-4 flex-grow">
+                   <RouteItemContent route={route} />
+                </div>
                 <div className="flex items-center gap-1">
+                  {route.googleMapsLink ? (
+                    <Button variant="ghost" size="icon" asChild>
+                      <a href={route.googleMapsLink} target="_blank" rel="noopener noreferrer" aria-label={`View map for ${route.title}`}>
+                        <Eye className="h-5 w-5 text-muted-foreground hover:text-primary" />
+                      </a>
+                    </Button>
+                  ) : (
+                    <Button variant="ghost" size="icon" asChild>
+                      <Link href={`/route/${route.id}`} aria-label={`View details for ${route.title}`}>
+                        <Eye className="h-5 w-5 text-muted-foreground hover:text-primary" />
+                      </Link>
+                    </Button>
+                  )}
                   <Button variant="ghost" size="icon" asChild>
-                    <Link href={`/route/${route.id}`} aria-label={`Edit details for ${route.title}`}> 
+                    <Link href={`/create?edit=${route.id}`} aria-label={`Edit details for ${route.title}`}> 
                         <Edit3 className="h-5 w-5 text-muted-foreground hover:text-primary" />
                     </Link>
                   </Button>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                       <Button variant="ghost" size="icon" aria-label={`Delete ${route.title}`}>
-                          <Trash2 className="h-5 w-5 text-muted-foreground hover:text-destructive" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Are you sure you want to delete this route?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          This action cannot be undone. This will permanently delete the route titled "{route.title}" from your shared routes.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={() => handleDeleteSharedRoute(route.id)}
-                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        >
-                          Delete
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                  <AlertDialogTrigger asChild>
+                     <Button variant="ghost" size="icon" onClick={() => setRouteToDelete(route)} aria-label={`Delete ${route.title}`}>
+                        <Trash2 className="h-5 w-5 text-muted-foreground hover:text-destructive" />
+                    </Button>
+                  </AlertDialogTrigger>
                 </div>
               </div>
             )) : (
@@ -225,8 +240,7 @@ export default function MyPage() {
           </CardContent>
         </Card>
 
-        {/* Cultural Rewards Section (if applicable) */}
-        {mockUser.isCulturalUser && mockRewards.length > 0 && (
+        {firebaseUser.isCulturalUser && mockRewards.length > 0 && (
           <Card className="rounded-xl shadow-md">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-xl"><Gift className="h-6 w-6 text-accent" />My Cultural Rewards</CardTitle>
@@ -250,8 +264,6 @@ export default function MyPage() {
         )}
       </div>
 
-
-      {/* Traveled Routes & Activity Section */}
       <Card className="rounded-xl shadow-md">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl"><ListChecks className="h-6 w-6 text-primary" />My Activity</CardTitle>
@@ -284,12 +296,10 @@ export default function MyPage() {
             )}
           </div>
           
-          {/* Placeholder for comments and ratings */}
           <h3 className="text-lg font-semibold text-foreground mb-3 mt-6 border-t pt-6">My Comments & Ratings</h3>
           <p className="text-muted-foreground text-sm">
             This section will show your specific comments and ratings across various routes.
           </p>
-          {/* Example item */}
           <div className="mt-4 p-3 border border-border rounded-lg bg-background">
             <p className="text-sm text-foreground">On <Link href="/route/tr1" className="font-medium text-primary hover:underline">Ancient Temple Trail</Link>:</p>
             <div className="flex items-center my-1">
@@ -301,6 +311,26 @@ export default function MyPage() {
           </div>
         </CardContent>
       </Card>
+
+      <AlertDialog open={!!routeToDelete} onOpenChange={(isOpen) => !isOpen && setRouteToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to delete this route?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the route titled "{routeToDelete?.title}" from your shared routes.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setRouteToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteSharedRoute}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

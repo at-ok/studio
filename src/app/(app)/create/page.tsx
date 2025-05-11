@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, type FormEvent, useEffect, ChangeEvent } from 'react';
@@ -7,14 +6,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Share2, Route, Info, ExternalLink, Map, Lightbulb, ImagePlus, Trash2 } from "lucide-react";
+import { Share2, Route, Info, ExternalLink, Lightbulb, Trash2, Edit, Save, MapPin } from "lucide-react";
 import Image from "next/image";
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Loader2 } from 'lucide-react';
 
-type CreateMode = 'options' | 'share' | 'new';
+type CreateMode = 'options' | 'share' | 'new' | 'edit';
 
-// Define a structure for the routes consistent with DiscoverPage
 interface SharedRoute {
   id: string;
   title: string;
@@ -42,20 +42,67 @@ export default function CreatePage() {
   const [isCulturalRoute, setIsCulturalRoute] = useState(false);
   const [uploadedImageDataUrl, setUploadedImageDataUrl] = useState<string | null>(null);
   const [picsumPreviewUrl, setPicsumPreviewUrl] = useState<string | null>(null);
+  
+  const [editingRouteId, setEditingRouteId] = useState<string | null>(null);
+  const [routeToEdit, setRouteToEdit] = useState<SharedRoute | null>(null);
+  const [isLoadingEditData, setIsLoadingEditData] = useState(false);
 
   const { toast } = useToast();
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
-  // Effect to clear form state when mode changes back to options
   useEffect(() => {
-    if (mode === 'options') {
+    const editId = searchParams.get('edit');
+    if (editId) {
+      setIsLoadingEditData(true);
+      if (typeof window !== 'undefined') {
+        const existingRoutesRaw = localStorage.getItem(SHARED_ROUTES_LS_KEY);
+        const existingRoutes: SharedRoute[] = existingRoutesRaw ? JSON.parse(existingRoutesRaw) : [];
+        const foundRoute = existingRoutes.find(r => r.id === editId);
+        
+        if (foundRoute) {
+          setRouteToEdit(foundRoute);
+          setEditingRouteId(foundRoute.id);
+          setRouteName(foundRoute.title);
+          setRouteDescription(foundRoute.description);
+          setGoogleMapsLink(foundRoute.googleMapsLink || '');
+          setIsCulturalRoute(foundRoute.isCulturalRoute);
+
+          if (foundRoute.imageUrl && !foundRoute.imageUrl.startsWith('https://picsum.photos')) {
+            setUploadedImageDataUrl(foundRoute.imageUrl);
+            setPicsumPreviewUrl(null);
+          } else if (foundRoute.googleMapsLink?.startsWith(VALID_MAPS_LINK_PREFIX)) {
+            setPicsumPreviewUrl(`https://picsum.photos/seed/${encodeURIComponent(foundRoute.googleMapsLink)}/600/300`);
+            setUploadedImageDataUrl(null);
+          } else if (foundRoute.imageUrl.startsWith('https://picsum.photos')) {
+             setPicsumPreviewUrl(foundRoute.imageUrl);
+             setUploadedImageDataUrl(null);
+          } else {
+            setUploadedImageDataUrl(null);
+            setPicsumPreviewUrl(null);
+          }
+          setMode('edit');
+        } else {
+          toast({ variant: "destructive", title: "Error", description: "Route not found for editing." });
+          router.push('/my-page');
+        }
+      }
+      setIsLoadingEditData(false);
+    }
+  }, [searchParams, toast, router]);
+
+  useEffect(() => {
+    if (mode === 'options' && !isLoadingEditData) {
       setGoogleMapsLink('');
       setPicsumPreviewUrl(null);
       setUploadedImageDataUrl(null);
       setRouteName('');
       setRouteDescription('');
       setIsCulturalRoute(false);
+      setEditingRouteId(null);
+      setRouteToEdit(null);
     }
-  }, [mode]);
+  }, [mode, isLoadingEditData]);
 
 
   const addRouteToLocalStorage = (newRoute: SharedRoute) => {
@@ -90,7 +137,7 @@ export default function CreatePage() {
     const link = e.target.value;
     setGoogleMapsLink(link);
 
-    if (!uploadedImageDataUrl) { // Only set picsum if no custom image is uploaded
+    if (!uploadedImageDataUrl) {
       if (link.startsWith(VALID_MAPS_LINK_PREFIX)) {
         setPicsumPreviewUrl(`https://picsum.photos/seed/${encodeURIComponent(link)}/600/300`);
       } else {
@@ -109,19 +156,15 @@ export default function CreatePage() {
   const handleImageUpload = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) { // 5MB limit
-        toast({
-          variant: "destructive",
-          title: "Image too large",
-          description: "Please upload an image smaller than 5MB.",
-        });
-        event.target.value = ''; // Clear the input
+      if (file.size > 5 * 1024 * 1024) {
+        toast({ variant: "destructive", title: "Image too large", description: "Please upload an image smaller than 5MB." });
+        event.target.value = '';
         return;
       }
       const reader = new FileReader();
       reader.onloadend = () => {
         setUploadedImageDataUrl(reader.result as string);
-        setPicsumPreviewUrl(null); // Clear picsum preview if a custom image is uploaded
+        setPicsumPreviewUrl(null);
       };
       reader.readAsDataURL(file);
     }
@@ -129,89 +172,131 @@ export default function CreatePage() {
 
   const removeUploadedImage = () => {
     setUploadedImageDataUrl(null);
-    // Restore picsum preview if link is valid
     if (googleMapsLink.startsWith(VALID_MAPS_LINK_PREFIX)) {
       setPicsumPreviewUrl(`https://picsum.photos/seed/${encodeURIComponent(googleMapsLink)}/600/300`);
     } else {
-      setPicsumPreviewUrl(null); // Ensure preview is null if link is not valid
+      setPicsumPreviewUrl(null);
     }
   };
 
   const handleSubmitSharedRoute = (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!googleMapsLink.startsWith(VALID_MAPS_LINK_PREFIX)) {
-      toast({
-        variant: "destructive",
-        title: "Invalid Google Maps Link",
-        description: `Please provide a valid Google Maps link starting with '${VALID_MAPS_LINK_PREFIX}'.`,
-      });
+      toast({ variant: "destructive", title: "Invalid Google Maps Link", description: `Please provide a valid Google Maps link starting with '${VALID_MAPS_LINK_PREFIX}'.` });
+      return;
+    }
+    if (!routeName || !routeDescription) {
+      toast({ variant: "destructive", title: "Missing Information", description: "Route name and description are required." });
       return;
     }
 
     let finalImageUrl = uploadedImageDataUrl || picsumPreviewUrl || `https://picsum.photos/seed/${encodeURIComponent(routeName || 'shared_route')}/600/400`;
-    let finalImageHint = "generic route image";
-
-    if (uploadedImageDataUrl) {
-      finalImageHint = "user uploaded";
-    } else if (picsumPreviewUrl) { // picsumPreviewUrl is only set if the link is valid
-      finalImageHint = "map preview";
-    }
-
+    let finalImageHint = uploadedImageDataUrl ? "user uploaded" : (picsumPreviewUrl ? "map preview" : "generic route image");
 
     const newRoute: SharedRoute = {
-      id: `user_shared_${Date.now()}`,
-      title: routeName,
-      description: routeDescription,
-      imageUrl: finalImageUrl,
-      imageHint: finalImageHint,
-      tags: isCulturalRoute ? ["Cultural", "Shared Map"] : ["Shared Map"],
-      rating: null,
-      reviews: 0,
-      duration: "Varies",
-      creator: "You (Shared)",
-      isCulturalRoute,
-      startPoint: "From Google Maps",
-      googleMapsLink: googleMapsLink,
+      id: `user_shared_${Date.now()}`, title: routeName, description: routeDescription, imageUrl: finalImageUrl, imageHint: finalImageHint,
+      tags: isCulturalRoute ? ["Cultural", "Shared Map"] : ["Shared Map"], rating: null, reviews: 0, duration: "Varies",
+      creator: "You (Shared)", isCulturalRoute, startPoint: "From Google Maps", googleMapsLink: googleMapsLink,
     };
     
     if(addRouteToLocalStorage(newRoute)) {
-        toast({
-            title: "Route Shared!",
-            description: `${routeName} has been added to your local shared routes.`,
-        });
-        setMode('options'); // Resets form via useEffect
+        toast({ title: "Route Shared!", description: `${routeName} has been added to your local shared routes.` });
+        setMode('options');
     }
   };
   
   const handleCreateNewRoute = (e: React.FormEvent) => {
     e.preventDefault();
-     const newRoute: SharedRoute = {
-      id: `user_created_${Date.now()}`,
-      title: routeName,
-      description: routeDescription,
-      imageUrl: `https://picsum.photos/seed/${encodeURIComponent(routeName || 'custom_route')}/600/400`,
-      imageHint: "custom community route",
-      tags: isCulturalRoute ? ["Cultural", "Custom"] : ["Custom"],
-      rating: null,
-      reviews: 0,
-      duration: "User Defined",
-      creator: "You (Created)",
-      isCulturalRoute,
-      startPoint: "User Described",
+    if (!routeName || !routeDescription) {
+      toast({ variant: "destructive", title: "Missing Information", description: "Route name and description are required." });
+      return;
+    }
+    const newRoute: SharedRoute = {
+      id: `user_created_${Date.now()}`, title: routeName, description: routeDescription,
+      imageUrl: uploadedImageDataUrl || `https://picsum.photos/seed/${encodeURIComponent(routeName || 'custom_route')}/600/400`,
+      imageHint: uploadedImageDataUrl ? "user uploaded" : "custom community route",
+      tags: isCulturalRoute ? ["Cultural", "Custom"] : ["Custom"], rating: null, reviews: 0, duration: "User Defined",
+      creator: "You (Created)", isCulturalRoute, startPoint: "User Described",
     };
 
     if(addRouteToLocalStorage(newRoute)) {
-        toast({
-            title: "Route Created!",
-            description: `${routeName} has been added to your local routes.`,
-        });
-        setMode('options'); // Resets form via useEffect
+        toast({ title: "Route Created!", description: `${routeName} has been added to your local routes.` });
+        setMode('options');
+    }
+  };
+
+  const handleUpdateRoute = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingRouteId || !routeToEdit) {
+      toast({ variant: "destructive", title: "Error", description: "No route selected for update." });
+      return;
+    }
+    if (routeToEdit.googleMapsLink && !googleMapsLink.startsWith(VALID_MAPS_LINK_PREFIX)) {
+      toast({ variant: "destructive", title: "Invalid Google Maps Link", description: `Link must start with '${VALID_MAPS_LINK_PREFIX}'.` });
+      return;
+    }
+    if (!routeName || !routeDescription) {
+      toast({ variant: "destructive", title: "Missing Information", description: "Route name and description are required." });
+      return;
+    }
+
+    let finalImageUrl = uploadedImageDataUrl || picsumPreviewUrl;
+    if (!finalImageUrl) {
+        finalImageUrl = routeToEdit.googleMapsLink 
+            ? `https://picsum.photos/seed/${encodeURIComponent(routeToEdit.googleMapsLink)}/600/300` 
+            : `https://picsum.photos/seed/${encodeURIComponent(routeName || 'custom_route')}/600/400`;
+    }
+    let finalImageHint = uploadedImageDataUrl ? "user uploaded" 
+                        : (picsumPreviewUrl && routeToEdit.googleMapsLink ? "map preview" 
+                        : (picsumPreviewUrl ? "custom community route" : "generic route image"));
+
+    const updatedRoute: SharedRoute = {
+      ...routeToEdit, title: routeName, description: routeDescription,
+      googleMapsLink: routeToEdit.googleMapsLink ? googleMapsLink : undefined,
+      isCulturalRoute, imageUrl: finalImageUrl, imageHint: finalImageHint,
+      tags: isCulturalRoute 
+          ? (routeToEdit.googleMapsLink ? ["Cultural", "Shared Map"] : ["Cultural", "Custom"])
+          : (routeToEdit.googleMapsLink ? ["Shared Map"] : ["Custom"]),
+    };
+
+    if (typeof window !== 'undefined') {
+      try {
+        const existingRoutesRaw = localStorage.getItem(SHARED_ROUTES_LS_KEY);
+        let existingRoutes: SharedRoute[] = existingRoutesRaw ? JSON.parse(existingRoutesRaw) : [];
+        if (existingRoutes.some(r => r.title === updatedRoute.title && r.id !== editingRouteId)) {
+            toast({ variant: "destructive", title: "Route title exists", description: "A route with this title already exists." });
+            return;
+        }
+        const routeIndex = existingRoutes.findIndex(r => r.id === editingRouteId);
+        if (routeIndex === -1) {
+          toast({ variant: "destructive", title: "Error", description: "Original route not found." });
+          return;
+        }
+        existingRoutes[routeIndex] = updatedRoute;
+        localStorage.setItem(SHARED_ROUTES_LS_KEY, JSON.stringify(existingRoutes));
+        toast({ title: "Route Updated!", description: `${routeName} has been successfully updated.` });
+        router.push('/my-page'); // Navigate after successful update
+      } catch (error) {
+        console.error("Error updating route:", error);
+        toast({ variant: "destructive", title: "Storage Error", description: "Could not update the route." });
+      }
+    }
+  };
+
+  const handleCancel = () => {
+    if (mode === 'edit') {
+      router.push('/my-page');
+    } else {
+      setMode('options');
+      router.push('/create', {scroll: false}); // Clear query params
     }
   };
 
   const currentPreviewUrl = uploadedImageDataUrl || picsumPreviewUrl;
 
+  if (isLoadingEditData) {
+    return <div className="flex items-center justify-center h-[calc(100vh-200px)]"><Loader2 className="h-12 w-12 animate-spin text-primary" /> <p className="ml-2">Loading route data...</p></div>;
+  }
 
   if (mode === 'options') {
     return (
@@ -223,229 +308,153 @@ export default function CreatePage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card className="hover:shadow-lg transition-shadow duration-300 rounded-xl">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-xl">
-                <Share2 className="h-6 w-6 text-primary" /> Share Existing Route
-              </CardTitle>
-              <CardDescription>
-                Already have a route planned on Google Maps? Share the link (must start with {VALID_MAPS_LINK_PREFIX}) and optionally add your own image.
-              </CardDescription>
+              <CardTitle className="flex items-center gap-2 text-xl"><Share2 className="h-6 w-6 text-primary" /> Share Existing Route</CardTitle>
+              <CardDescription>Share a Google Maps link (must start with {VALID_MAPS_LINK_PREFIX}) and optionally add an image.</CardDescription>
             </CardHeader>
-            <CardContent>
-              <Button onClick={() => setMode('share')} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
-                Share Google Maps Route
-              </Button>
-            </CardContent>
+            <CardContent><Button onClick={() => setMode('share')} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">Share Google Maps Route</Button></CardContent>
           </Card>
           <Card className="hover:shadow-lg transition-shadow duration-300 rounded-xl">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-xl">
-                <Route className="h-6 w-6 text-accent" /> Create New Route
-              </CardTitle>
-              <CardDescription>
-                Use our tools or get guidance to create a brand new route.
-              </CardDescription>
+              <CardTitle className="flex items-center gap-2 text-xl"><Route className="h-6 w-6 text-accent" /> Create New Route</CardTitle>
+              <CardDescription>Design your own route, providing details and optionally an image.</CardDescription>
             </CardHeader>
-            <CardContent>
-              <Button onClick={() => setMode('new')} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
-                Create a New Route
-              </Button>
-            </CardContent>
+            <CardContent><Button onClick={() => setMode('new')} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">Create a New Route</Button></CardContent>
           </Card>
         </div>
       </div>
     );
   }
 
-  if (mode === 'share') {
-    return (
-      <div className="space-y-8">
-        <header className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">Share Google Maps Route</h1>
-            <p className="text-muted-foreground">Paste your Google Maps route link and add details.</p>
-          </div>
-          <Button variant="outline" onClick={() => setMode('options')}>Back to Options</Button>
-        </header>
-        <Card className="rounded-xl shadow-lg">
-          <form onSubmit={handleSubmitSharedRoute}>
-            <CardContent className="p-6 space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="routeName" className="text-base">Route Name</Label>
-                <Input 
-                  id="routeName" 
-                  placeholder="e.g., Historic Downtown Walk" 
-                  value={routeName} 
-                  onChange={(e) => setRouteName(e.target.value)}
-                  required 
-                  className="py-3"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="routeDescription" className="text-base">Route Description</Label>
-                <Textarea 
-                  id="routeDescription" 
-                  placeholder="A brief description of your route, what makes it special, etc." 
-                  value={routeDescription}
-                  onChange={(e) => setRouteDescription(e.target.value)}
-                  rows={3}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="googleMapsLink" className="text-base">Google Maps Link</Label>
-                <Input 
-                  id="googleMapsLink" 
-                  type="url" 
-                  placeholder={`${VALID_MAPS_LINK_PREFIX}...`}
-                  value={googleMapsLink} 
-                  onChange={handleLinkPaste} 
-                  required 
-                  className="py-3"
-                />
-                <p className="text-xs text-muted-foreground">Must be a valid Google Maps share link starting with '{VALID_MAPS_LINK_PREFIX}'.</p>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="routeImage" className="text-base">Route Image (Optional)</Label>
-                <Input 
-                  id="routeImage" 
-                  type="file" 
-                  accept="image/*" 
-                  onChange={handleImageUpload}
-                  className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
-                />
-                <p className="text-xs text-muted-foreground">Max file size: 5MB. Replaces map preview if uploaded.</p>
-              </div>
+  // Combined Form for Share, New, and Edit modes
+  const isEditMode = mode === 'edit';
+  const isShareLike = (isEditMode && routeToEdit?.googleMapsLink) || mode === 'share';
+  const isNewLike = (isEditMode && !routeToEdit?.googleMapsLink) || mode === 'new';
 
-              {currentPreviewUrl && (
-                <div className="space-y-2">
-                  <Label className="text-base">Route Preview</Label>
-                  <div className="border border-border rounded-lg overflow-hidden aspect-video relative group">
-                    <Image src={currentPreviewUrl} alt="Route Preview" width={600} height={300} className="object-cover w-full h-full" data-ai-hint={uploadedImageDataUrl ? "user uploaded image" : "map preview"} />
-                    {uploadedImageDataUrl && (
-                      <Button 
-                        variant="destructive" 
-                        size="icon" 
-                        onClick={removeUploadedImage} 
-                        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                        aria-label="Remove uploaded image"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
+  let pageTitle = "";
+  let submitIcon = <Route className="h-5 w-5" />;
+  let submitText = "";
+  let submitHandler: (e: FormEvent) => void = () => {};
+  let primaryButtonClass = "bg-accent hover:bg-accent/90 text-accent-foreground";
+
+  if (isEditMode) {
+    pageTitle = `Edit Route: ${routeToEdit?.title}`;
+    submitIcon = <Save className="h-5 w-5" />;
+    submitText = "Update Route";
+    submitHandler = handleUpdateRoute;
+    primaryButtonClass = routeToEdit?.googleMapsLink ? "bg-primary hover:bg-primary/90 text-primary-foreground" : "bg-accent hover:bg-accent/90 text-accent-foreground";
+  } else if (isShareLike) {
+    pageTitle = "Share Google Maps Route";
+    submitIcon = <Share2 className="h-5 w-5" />;
+    submitText = "Share Route";
+    submitHandler = handleSubmitSharedRoute;
+    primaryButtonClass = "bg-primary hover:bg-primary/90 text-primary-foreground";
+  } else if (isNewLike) {
+    pageTitle = "Create a New Route";
+    submitIcon = <Route className="h-5 w-5" />;
+    submitText = "Create Route";
+    submitHandler = handleCreateNewRoute;
+  }
+  
+  return (
+    <div className="space-y-8">
+      <header className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">{pageTitle}</h1>
+          <p className="text-muted-foreground">
+            {isEditMode ? "Modify the details of your route." : (isShareLike ? "Paste your Google Maps route link and add details." : "Design your own unique cultural journey.")}
+          </p>
+        </div>
+        <Button variant="outline" onClick={handleCancel}>
+          {isEditMode ? "Cancel" : "Back to Options"}
+        </Button>
+      </header>
+
+      {isNewLike && !isEditMode && ( // Show guide only for 'new' mode, not 'edit' custom route
+        <Card className="rounded-xl shadow-lg border-l-4 border-primary bg-primary/5">
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg text-primary"><Info className="h-5 w-5" /> Route Creation Guide</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+                <p className="text-foreground/90">
+                To create a high-quality route, we recommend using Google Maps for its planning features.
+                </p>
+                <ol className="list-decimal list-inside space-y-1.5 text-foreground/80">
+                <li>Open <a href="https://www.google.com/maps" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">Google Maps <ExternalLink className="inline h-4 w-4"/></a>.</li>
+                <li>Plan your route, then generate a shareable link (starting with {VALID_MAPS_LINK_PREFIX}).</li>
+                <li>Return here and choose "Share Existing Route" to submit your link.</li>
+                </ol>
+                <div className="mt-4 p-4 rounded-md bg-background/70 border border-border shadow-sm">
+                  <div className="flex items-start gap-3">
+                      <Lightbulb className="h-6 w-6 text-primary mt-0.5 flex-shrink-0" />
+                      <div>
+                      <h4 className="font-semibold text-primary">Pro Tip: Adding Detail</h4>
+                      <p className="text-xs text-foreground/80 mt-1">
+                          Make your route descriptive! Include notes about cultural spots, history, or unique features. This helps others appreciate the journey.
+                      </p>
+                      </div>
                   </div>
                 </div>
-              )}
-              
-              <div className="flex items-center space-x-2 pt-2">
-                <Checkbox id="isCulturalRoute" checked={isCulturalRoute} onCheckedChange={(checked) => setIsCulturalRoute(Boolean(checked))} />
-                <Label htmlFor="isCulturalRoute" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                  This is a Cultural Route (e.g., focuses on local traditions, history, art)
-                </Label>
-              </div>
-
-              <div className="flex justify-end gap-4 pt-4">
-                <Button type="button" variant="outline" onClick={() => setMode('options')}>Cancel</Button>
-                <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground flex items-center gap-2">
-                  <Share2 className="h-5 w-5" /> Share Route
-                </Button>
-              </div>
+                <p className="text-foreground/90 pt-2">
+                Alternatively, describe your route in the form below if you don't have a Google Maps link.
+                </p>
             </CardContent>
-          </form>
         </Card>
-      </div>
-    );
-  }
+      )}
+      
+      <Card className="rounded-xl shadow-lg">
+        <form onSubmit={submitHandler}>
+          <CardContent className="p-6 space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="routeName" className="text-base">Route Name</Label>
+              <Input id="routeName" placeholder="e.g., Historic Downtown Walk" value={routeName} onChange={(e) => setRouteName(e.target.value)} required className="py-3"/>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="routeDescription" className="text-base">Route Description</Label>
+              <Textarea id="routeDescription" placeholder="A brief description of your route..." value={routeDescription} onChange={(e) => setRouteDescription(e.target.value)} rows={3} required/>
+            </div>
 
-  if (mode === 'new') {
-    return (
-      <div className="space-y-8">
-        <header className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">Create a New Route</h1>
-            <p className="text-muted-foreground">Design your own unique cultural journey.</p>
-          </div>
-          <Button variant="outline" onClick={() => setMode('options')}>Back to Options</Button>
-        </header>
-
-        <Card className="rounded-xl shadow-lg">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-xl">
-              <Info className="h-6 w-6 text-primary" /> Route Creation Guide
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-muted-foreground">
-              To create a high-quality route, we recommend using Google Maps for its powerful route planning features.
-            </p>
-            <ol className="list-decimal list-inside space-y-2 text-foreground">
-              <li>Open <a href="https://www.google.com/maps" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">Google Maps <ExternalLink className="inline h-4 w-4"/></a> in a new tab or its app.</li>
-              <li>Plan your route by adding desired waypoints and spots.</li>
-              <li>Once your route is finalized, generate a shareable link for it (it should start with {VALID_MAPS_LINK_PREFIX}).</li>
-              <li>Come back here and choose "Share Existing Route" to submit your link. You'll be able to add a custom image too!</li>
-            </ol>
-            
-            <Card className="border-primary border-l-4 bg-primary/5 rounded-lg shadow-sm mt-6">
-                <CardContent className="p-6">
-                  <div className="flex items-start gap-4">
-                    <Lightbulb className="h-10 w-10 text-primary mt-1 flex-shrink-0" />
-                    <div>
-                      <h4 className="font-semibold text-primary text-lg">Pro Tip: Adding Detail</h4>
-                      <p className="text-sm text-foreground/90 mt-1">
-                        For the best experience, make your route descriptive. Include notes about specific cultural spots, historical significance, or unique features along the way. This helps others appreciate the journey!
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-            </Card>
-
-
-            <p className="text-muted-foreground pt-4">
-              Alternatively, you can describe your route below. Providing a Google Maps link is preferred for accuracy if possible.
-            </p>
-            
-            <form onSubmit={handleCreateNewRoute} className="space-y-6 pt-4 border-t border-border">
-               <div className="space-y-2">
-                <Label htmlFor="newRouteName" className="text-base">Route Name</Label>
-                <Input 
-                  id="newRouteName" 
-                  placeholder="e.g., Artisans of Old Town" 
-                  value={routeName} 
-                  onChange={(e) => setRouteName(e.target.value)}
-                  required 
-                  className="py-3"
-                />
-              </div>
+            {isShareLike && (
               <div className="space-y-2">
-                <Label htmlFor="newRouteDescription" className="text-base">Route Description & Spots</Label>
-                <Textarea 
-                  id="newRouteDescription" 
-                  placeholder="Describe your route in detail. List key spots, their significance, and any tips for travelers." 
-                  value={routeDescription}
-                  onChange={(e) => setRouteDescription(e.target.value)}
-                  rows={5}
-                  required
-                />
+                <Label htmlFor="googleMapsLink" className="text-base">Google Maps Link</Label>
+                <Input id="googleMapsLink" type="url" placeholder={`${VALID_MAPS_LINK_PREFIX}...`} value={googleMapsLink} onChange={handleLinkPaste} required={mode==='share'} className="py-3"/>
+                <p className="text-xs text-muted-foreground">Must start with '{VALID_MAPS_LINK_PREFIX}'.</p>
               </div>
-              <div className="flex items-center space-x-2 pt-2">
-                <Checkbox id="newIsCulturalRoute" checked={isCulturalRoute} onCheckedChange={(checked) => setIsCulturalRoute(Boolean(checked))} />
-                <Label htmlFor="newIsCulturalRoute" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                  This is a Cultural Route
-                </Label>
+            )}
+            
+            <div className="space-y-2">
+              <Label htmlFor="routeImage" className="text-base">Route Image (Optional)</Label>
+              <Input id="routeImage" type="file" accept="image/*" onChange={handleImageUpload} className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"/>
+              <p className="text-xs text-muted-foreground">Max 5MB. {isShareLike ? "Replaces map preview if uploaded." : "A default image will be used if none provided."}</p>
+            </div>
+
+            {currentPreviewUrl && (
+              <div className="space-y-2">
+                <Label className="text-base">Route Preview</Label>
+                <div className="border border-border rounded-lg overflow-hidden aspect-video relative group">
+                  <Image src={currentPreviewUrl} alt="Route Preview" width={600} height={300} className="object-cover w-full h-full" data-ai-hint={uploadedImageDataUrl ? "user uploaded image" : "map preview"} />
+                  {uploadedImageDataUrl && (
+                    <Button variant="destructive" size="icon" onClick={removeUploadedImage} className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Remove uploaded image">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
               </div>
-               <div className="flex justify-end gap-4 pt-4">
-                <Button type="button" variant="outline" onClick={() => setMode('options')}>Cancel</Button>
-                <Button type="submit" className="bg-accent hover:bg-accent/90 text-accent-foreground flex items-center gap-2">
-                  <Route className="h-5 w-5" /> Create Route
-                </Button>
-              </div>
-            </form>
+            )}
+            
+            <div className="flex items-center space-x-2 pt-2">
+              <Checkbox id="isCulturalRoute" checked={isCulturalRoute} onCheckedChange={(checked) => setIsCulturalRoute(Boolean(checked))} />
+              <Label htmlFor="isCulturalRoute" className="text-sm font-medium">This is a Cultural Route</Label>
+            </div>
+
+            <div className="flex justify-end gap-4 pt-4">
+              <Button type="button" variant="outline" onClick={handleCancel}>Cancel</Button>
+              <Button type="submit" className={`${primaryButtonClass} flex items-center gap-2`}>
+                {submitIcon} {submitText}
+              </Button>
+            </div>
           </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  return null; // Should not happen
+        </form>
+      </Card>
+    </div>
+  );
 }
-
