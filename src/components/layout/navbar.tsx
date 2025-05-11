@@ -1,7 +1,8 @@
+
 "use client";
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation'; // Added useRouter
 import { Compass, PlusSquare, User, LogIn, LogOut, Menu } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -32,9 +33,14 @@ const useMockAuth = () => {
 
   useEffect(() => {
     // Simulate fetching user data
-    const storedUser = localStorage.getItem('mockUser');
+    const storedUser = typeof window !== 'undefined' ? localStorage.getItem('mockUser') : null;
     if (storedUser) {
-      setUser(JSON.parse(storedUser));
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch (error) {
+        console.error("Failed to parse mockUser from localStorage", error);
+        localStorage.removeItem('mockUser'); // Clear corrupted item
+      }
     }
     setLoading(false);
   }, []);
@@ -42,11 +48,15 @@ const useMockAuth = () => {
 
   const login = () => {
     const mockUserData = { name: 'User Name', email: 'user@example.com', imageUrl: 'https://picsum.photos/100/100?q=user' };
-    localStorage.setItem('mockUser', JSON.stringify(mockUserData));
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('mockUser', JSON.stringify(mockUserData));
+    }
     setUser(mockUserData);
   };
   const logout = () => {
-    localStorage.removeItem('mockUser');
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('mockUser');
+    }
     setUser(null);
   };
   
@@ -56,7 +66,8 @@ const useMockAuth = () => {
 
 export function Navbar() {
   const pathname = usePathname();
-  const { user, loading, login, logout } = useMockAuth();
+  const router = useRouter(); // Instantiate router
+  const { user, loading, logout } = useMockAuth(); // login from useMockAuth is not used for navigation anymore
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const NavLink = ({ href, children, icon: Icon, 'aria-label': ariaLabel }: { href: string; children: React.ReactNode; icon: React.ElementType; 'aria-label': string }) => (
@@ -91,6 +102,9 @@ export function Navbar() {
     </Link>
   );
 
+  const handleSignIn = () => {
+    router.push('/auth/signin');
+  };
 
   if (loading) {
     return (
@@ -147,7 +161,7 @@ export function Navbar() {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-             <Button onClick={login} variant="outline" className="hidden md:flex items-center gap-2 border-primary text-primary hover:bg-primary/10 hover:text-primary">
+             <Button onClick={handleSignIn} variant="outline" className="hidden md:flex items-center gap-2 border-primary text-primary hover:bg-primary/10 hover:text-primary">
               <LogIn className="h-4 w-4" /> Sign In
             </Button>
           )}
@@ -182,7 +196,7 @@ export function Navbar() {
                       </Button>
                     </>
                   ) : (
-                    <Button onClick={() => { login(); setIsMobileMenuOpen(false); }} variant="outline" className="w-full justify-start flex items-center gap-3 text-base font-medium border-primary text-primary hover:bg-primary/10 hover:text-primary px-4 py-3">
+                    <Button onClick={() => { handleSignIn(); setIsMobileMenuOpen(false); }} variant="outline" className="w-full justify-start flex items-center gap-3 text-base font-medium border-primary text-primary hover:bg-primary/10 hover:text-primary px-4 py-3">
                       <LogIn className="h-6 w-6" /> Sign In
                     </Button>
                   )}
@@ -195,3 +209,4 @@ export function Navbar() {
     </header>
   );
 }
+
