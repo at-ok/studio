@@ -97,9 +97,37 @@ export default function DiscoverPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRoute, setSelectedRoute] = useState<DiscoverRoute | null>(null);
   const [map, setMap] = useState<google.maps.Map | null>(null);
+  const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
+
 
   const onMapLoad = useCallback((mapInstance: google.maps.Map) => {
     setMap(mapInstance);
+    // Get user's current location
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const userLocation = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          };
+          setCurrentLocation(userLocation);
+          mapInstance.setCenter(userLocation);
+          mapInstance.setZoom(14); // Zoom in more when current location is available
+        },
+        () => {
+          // Handle error or if user denies location access
+          // Fallback to default center and zoom
+          mapInstance.setCenter(defaultCenter);
+          mapInstance.setZoom(12); 
+          console.warn("User location not available or denied. Using default map center.");
+        }
+      );
+    } else {
+      // Geolocation not supported
+      mapInstance.setCenter(defaultCenter);
+      mapInstance.setZoom(12); 
+      console.warn("Geolocation is not supported by this browser. Using default map center.");
+    }
   }, []);
 
   const onMapUnmount = useCallback(() => {
@@ -133,8 +161,7 @@ export default function DiscoverPage() {
   // Ensure the API key is set. If not, you might want to display a message or a fallback.
   const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   if (!googleMapsApiKey) {
-      console.warn("Google Maps API key is not set. Map functionality will be limited.");
-      // Optionally return a fallback UI or message here
+      console.warn("Google Maps API key is not set (NEXT_PUBLIC_GOOGLE_MAPS_API_KEY). Map functionality will be limited.");
   }
 
   return (
@@ -163,10 +190,14 @@ export default function DiscoverPage() {
               <LoadScript googleMapsApiKey={googleMapsApiKey}>
                 <GoogleMap
                   mapContainerStyle={mapContainerStyle}
-                  center={defaultCenter}
-                  zoom={10}
+                  center={currentLocation || defaultCenter}
+                  zoom={currentLocation ? 14 : 12} // Use more zoomed in if location available
                   onLoad={onMapLoad}
                   onUnmount={onMapUnmount}
+                  options={{
+                    streetViewControl: false,
+                    mapTypeControl: false,
+                  }}
                 >
                   {filteredRoutes.map(route => (
                     route.startPointCoords && (
@@ -183,20 +214,24 @@ export default function DiscoverPage() {
                       position={selectedRoute.startPointCoords}
                       onCloseClick={() => setSelectedRoute(null)}
                     >
-                      <div>
-                        <h3 className="font-semibold text-foreground">{selectedRoute.title}</h3>
-                        <p className="text-sm text-muted-foreground">Starts at: {selectedRoute.startPoint}</p>
-                        <Link href={`/route/${selectedRoute.id}`} className="text-sm text-primary hover:underline">
-                          View Details
-                        </Link>
+                      <div className="p-1">
+                        <h3 className="font-semibold text-foreground mb-1">{selectedRoute.title}</h3>
+                        <p className="text-xs text-muted-foreground mb-2">Starts at: {selectedRoute.startPoint}</p>
+                        <Button variant="link" size="sm" asChild className="p-0 h-auto text-primary hover:underline">
+                           <Link href={`/route/${selectedRoute.id}`}>View Details</Link>
+                        </Button>
                       </div>
                     </InfoWindow>
                   )}
                 </GoogleMap>
               </LoadScript>
             ) : (
-              <div className="w-full aspect-[16/9] md:aspect-[2.5/1] bg-muted flex items-center justify-center">
-                <p className="text-muted-foreground">Map cannot be displayed. Google Maps API key is missing.</p>
+              <div className="w-full aspect-[16/9] md:aspect-[2.5/1] bg-muted flex items-center justify-center rounded-lg">
+                <MapPin className="h-10 w-10 text-muted-foreground mr-3" />
+                <div>
+                    <p className="font-semibold text-foreground">Map Preview Unavailable</p>
+                    <p className="text-sm text-muted-foreground">Google Maps API key is missing or invalid.</p>
+                </div>
               </div>
             )}
           </CardContent>
@@ -230,7 +265,7 @@ export default function DiscoverPage() {
               </CardHeader>
               <CardContent className="p-6 flex-grow">
                 <CardTitle className="text-xl font-semibold mb-2 text-foreground">{route.title}</CardTitle>
-                <CardDescription className="text-muted-foreground text-sm mb-3 line-clamp-3 h-12">{route.description}</CardDescription>
+                <CardDescription className="text-muted-foreground text-sm mb-3 line-clamp-3 h-[3.75rem]">{/* approx 3 lines with line-height 1.25rem */ route.description}</CardDescription>
                 <div className="flex items-center text-sm text-muted-foreground mb-1">
                   <MapPin className="h-4 w-4 mr-1.5 text-primary" /> Starts at {route.startPoint}
                 </div>
