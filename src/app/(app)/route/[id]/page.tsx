@@ -322,9 +322,26 @@ export default function RouteDetailPage() {
               // Already an embed link
               embedSrc = route.googleMapsLink;
             } else if (route.googleMapsLink.includes("/maps/")) {
-              embedSrc = route.googleMapsLink.replace("/maps/", "/maps/embed/");
+               // Attempt to construct a basic embed link for general /maps/ links.
+               // This might not work for all types of Google Maps links, especially complex ones.
+               // A more robust solution might involve parsing the URL to extract place IDs or coordinates
+               // and constructing an embed URL using the Google Maps Embed API format.
+               // For simplicity, this basic replacement is a common case.
+              const urlParts = route.googleMapsLink.split('/@');
+              if (urlParts.length > 1 && urlParts[0].includes('/place/')) {
+                 // Looks like a place URL, try to make an embed link
+                 const placeName = urlParts[0].substring(urlParts[0].lastIndexOf('/') + 1);
+                 embedSrc = `https://www.google.com/maps/embed/v1/place?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&q=${encodeURIComponent(placeName)}`;
+              } else if (urlParts.length > 1) {
+                 // Looks like a coordinate-based URL, try to make an embed link
+                 const coordsAndZoom = urlParts[1].split(',');
+                 if (coordsAndZoom.length >= 3) { // lat, lng, zoom
+                    embedSrc = `https://www.google.com/maps/embed/v1/view?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&center=${coordsAndZoom[0]},${coordsAndZoom[1]}&zoom=${coordsAndZoom[2].replace('z', '')}`;
+                 }
+              }
+              // If not a known pattern, it might fallback to original or just not embed well.
             }
-            // If none of the conditions match, embedSrc remains the original link.
+
 
             return (
               <div className="my-6">
@@ -352,9 +369,15 @@ export default function RouteDetailPage() {
             );
           })()}
           
-          <Separator className="my-6" />
-          <h2 className="text-xl font-semibold text-foreground mb-3">About this Route</h2>
-          <p className="text-foreground whitespace-pre-line leading-relaxed">{route.longDescription || route.description}</p>
+          {route.longDescription && (
+            <>
+              <Separator className="my-6" />
+              <h2 className="text-xl font-semibold text-foreground mb-3">About this Route</h2>
+              <p className="text-foreground whitespace-pre-line leading-relaxed">
+                {route.longDescription}
+              </p>
+            </>
+          )}
         </CardContent>
       </Card>
 
