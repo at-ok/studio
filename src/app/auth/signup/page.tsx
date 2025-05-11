@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { UserPlus, Mail, KeyRound, ShieldQuestion } from "lucide-react";
 import { Logo } from "@/components/common/logo";
 import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import { getAuth, GoogleAuthProvider, signInWithPopup, createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { getFirestore, doc, setDoc } from "firebase/firestore";
+// Ensure you have firebase initialized in a file e.g. src/lib/firebase.ts and import app from it
+// For this example, we'll assume firebaseApp is available or getAuth() initializes if not already.
+// import { app as firebaseApp } from '@/lib/firebase'; // Example: if you have a firebase.ts
 
 // Google Icon SVG as a component
 const GoogleIcon = () => (
@@ -25,21 +32,96 @@ const GoogleIcon = () => (
 export default function SignUpPage() {
   const [isCulturalUser, setIsCulturalUser] = useState(false);
   const [culturalInterest, setCulturalInterest] = useState("");
+  const router = useRouter();
+  const { toast } = useToast();
 
-  const handleSignUp = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSignUp = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    // TODO: Implement Firebase email/password sign up
     const formData = new FormData(event.currentTarget);
-    const data = Object.fromEntries(formData.entries());
-    const fullData = { ...data, isCulturalUser, culturalInterest: isCulturalUser ? culturalInterest : "" };
-    console.log("Sign Up Data:", fullData);
-    // In a real app, this data would be sent to Firebase Authentication and Firestore
-    alert("Sign up functionality to be implemented. Check console for data.");
+    const fullName = formData.get("fullName") as string;
+    const email = formData.get("email") as string;
+    const password = formData.get("password") as string;
+
+    const auth = getAuth(); // Assumes firebaseApp is initialized
+    const db = getFirestore(); // Assumes firebaseApp is initialized
+
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      await updateProfile(user, { displayName: fullName });
+
+      // Store additional user info in Firestore
+      await setDoc(doc(db, "users", user.uid), {
+        uid: user.uid,
+        displayName: fullName,
+        email: user.email,
+        isCulturalUser: isCulturalUser,
+        culturalInterest: isCulturalUser ? culturalInterest : "",
+        createdAt: new Date().toISOString(),
+      });
+      
+      toast({
+        title: "Account Created!",
+        description: "Welcome to Culture Compass!",
+      });
+      router.push('/discover'); // Or a profile completion page if needed for cultural info specifically
+    } catch (error: any) {
+      console.error("Sign Up Error:", error);
+      toast({
+        variant: "destructive",
+        title: "Sign Up Failed",
+        description: error.message || "An unexpected error occurred.",
+      });
+    }
   };
 
-  const handleGoogleSignUp = () => {
-    // TODO: Implement Firebase Google Sign Up
-    alert("Google Sign up functionality to be implemented.");
+  const handleGoogleSignUp = async () => {
+    const auth = getAuth(); // Assumes firebaseApp is initialized
+    const provider = new GoogleAuthProvider();
+    const db = getFirestore(); // Assumes firebaseApp is initialized
+
+    try {
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      
+      // Check if user data already exists in Firestore (e.g. for existing users)
+      // For a new user via Google, you might want to collect cultural info here or redirect
+      // For simplicity, we'll just create/update their user doc.
+      // A more robust solution would check if the document exists before setting.
+      // `getAdditionalUserInfo(result).isNewUser` can be used.
+      await setDoc(doc(db, "users", user.uid), {
+        uid: user.uid,
+        displayName: user.displayName,
+        email: user.email,
+        photoURL: user.photoURL,
+        // Cultural info is not collected in this flow, user can add it in profile settings
+        isCulturalUser: false, // Default or fetch existing if not a new user
+        culturalInterest: "", // Default
+        createdAt: new Date().toISOString(), // Or check if user is new before setting
+      }, { merge: true }); // Merge true to avoid overwriting existing data if user signs in
+
+      toast({
+        title: "Signed in with Google!",
+        description: `Welcome, ${user.displayName || 'User'}!`,
+      });
+      router.push('/discover');
+    } catch (error: any)      {
+      console.error("Google Sign-Up Error:", error);
+      let errorMessage = "An unexpected error occurred.";
+      if (error.code === 'auth/account-exists-with-different-credential') {
+        errorMessage = "An account already exists with the same email address but different sign-in credentials. Try signing in with the original method.";
+      } else if (error.code === 'auth/popup-closed-by-user') {
+        errorMessage = "Sign-in popup closed by user. Please try again.";
+      } else {
+        errorMessage = error.message || errorMessage;
+      }
+      toast({
+        variant: "destructive",
+        title: "Google Sign-In Failed",
+        description: errorMessage,
+      });
+    }
   };
 
   return (
