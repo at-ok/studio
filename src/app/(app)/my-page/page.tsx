@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ListChecks, Route, MessageSquare, Star, Award, Edit3, Gift, Settings, Loader2, Trash2, Eye, Compass } from "lucide-react";
+import { ListChecks, Route, MessageSquare, Star, Award, Edit3, Gift, Settings, Loader2, Trash2, Compass } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -183,9 +183,7 @@ export default function MyPage() {
     );
   }
   
-  if (!user || !firebaseUser) { // If after initial load, still no user, it means they should be redirected or shown nothing.
-    // The auth listener in useEffect already handles redirection to /auth/signin.
-    // This state primarily prevents rendering MyPage content before auth status is confirmed.
+  if (!user || !firebaseUser) { 
      return (
       <div className="flex items-center justify-center h-[calc(100vh-200px)]">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -194,13 +192,30 @@ export default function MyPage() {
     );
   }
 
-  // Placeholder for comment count, dynamically determined based on firebaseUser state.
   const currentCommentsCount = firebaseUser?.isNewUser ? 0 : 1; 
 
 
   return (
     <div className="space-y-8">
       <AlertDialog open={!!routeToDelete} onOpenChange={(isOpen) => { if (!isOpen) setRouteToDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to delete this route?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the route titled "{routeToDelete?.title}" from your shared routes.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setRouteToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteSharedRoute}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+
         <Card className="overflow-hidden rounded-xl shadow-lg">
           <CardHeader className="bg-muted/30 p-6 flex flex-col md:flex-row items-start md:items-center gap-6">
             <Avatar className="h-24 w-24 border-4 border-primary shadow-md">
@@ -234,22 +249,15 @@ export default function MyPage() {
             <CardContent className="space-y-4">
               {(userSharedRoutes.length > 0 || !firebaseUser.isNewUser) && userSharedRoutes.map(route => (
                 <div key={route.id} className="flex items-center justify-between gap-4 p-3 border border-border rounded-lg hover:bg-muted/20 transition-colors">
-                  <div className="flex items-center gap-4 flex-grow min-w-0"> {/* Added min-w-0 for flex-grow to work properly with ellipsis */}
+                  <div className="flex items-center gap-4 flex-grow min-w-0">
                     <RouteItemContent route={route} />
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0"> {/* Added flex-shrink-0 */}
+                  <div className="flex items-center gap-2 flex-shrink-0">
                     <Button variant="outline" size="sm" asChild className="border-primary text-primary hover:bg-primary hover:text-primary-foreground">
                       <Link href={`/route/${route.id}`} aria-label={`View details for ${route.title}`}>
                         View Route
                       </Link>
                     </Button>
-                    {route.googleMapsLink && (
-                      <Button variant="ghost" size="icon" asChild>
-                        <a href={route.googleMapsLink} target="_blank" rel="noopener noreferrer" aria-label={`View map for ${route.title}`}>
-                          <Eye className="h-5 w-5 text-muted-foreground hover:text-primary" />
-                        </a>
-                      </Button>
-                    )}
                     <Button variant="ghost" size="icon" asChild>
                       <Link href={`/create?edit=${route.id}`} aria-label={`Edit details for ${route.title}`}> 
                           <Edit3 className="h-5 w-5 text-muted-foreground hover:text-primary" />
@@ -401,24 +409,6 @@ export default function MyPage() {
             )}
           </CardContent>
         </Card>
-
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure you want to delete this route?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the route titled "{routeToDelete?.title}" from your shared routes.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setRouteToDelete(null)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteSharedRoute}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
       </AlertDialog>
     </div>
   );
