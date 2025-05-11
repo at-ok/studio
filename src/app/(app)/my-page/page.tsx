@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -16,11 +17,11 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
+  // AlertDialogTrigger, // No longer needed here for this specific pattern
 } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
 import { getAuth, onAuthStateChanged, type User } from "firebase/auth";
-import { auth as firebaseAuth } from "@/lib/firebase"; // Assuming firebaseAuth is exported from firebase.ts
+import { auth as firebaseAuth } from "@/lib/firebase"; 
 import { useRouter } from 'next/navigation';
 
 
@@ -34,7 +35,7 @@ interface MySharedRoute {
   status?: "Published" | "Draft" | "Shared (Local)";
   views?: number;
   rating?: number | null;
-  googleMapsLink?: string; // Added for Google Maps link
+  googleMapsLink?: string; 
 }
 
 const SHARED_ROUTES_LS_KEY = 'userSharedRoutes';
@@ -51,7 +52,7 @@ const mockRewards = [
 
 export default function MyPage() {
   const [user, setUser] = useState<User | null>(null);
-  const [firebaseUser, setFirebaseUser] = useState<any | null>(null); // For Firestore user data
+  const [firebaseUser, setFirebaseUser] = useState<any | null>(null); 
   const [userSharedRoutes, setUserSharedRoutes] = useState<MySharedRoute[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [routeToDelete, setRouteToDelete] = useState<MySharedRoute | null>(null);
@@ -63,32 +64,26 @@ export default function MyPage() {
     const unsubscribe = onAuthStateChanged(firebaseAuth, async (currentUser) => {
       if (currentUser) {
         setUser(currentUser);
-        // TODO: Fetch user profile data from Firestore based on currentUser.uid
-        // For now, using a mock or assuming basic info from auth
         setFirebaseUser({
             name: currentUser.displayName || "User",
             email: currentUser.email || "No email",
             avatarUrl: currentUser.photoURL || `https://picsum.photos/seed/${currentUser.uid}/200/200`,
             avatarHint: "user avatar",
             joinDate: `Joined ${currentUser.metadata.creationTime ? new Date(currentUser.metadata.creationTime).toLocaleDateString() : 'recently'}`,
-            // These would come from Firestore
-            // isCulturalUser: false, 
-            // culturalInterest: "",
         });
-        fetchSharedRoutes();
+        // fetchSharedRoutes will be called by the useEffect below that depends on `user`
       } else {
         setUser(null);
         setFirebaseUser(null);
-        router.push('/auth/signin'); // Redirect if not signed in
+        router.push('/auth/signin'); 
       }
-      setIsLoading(false);
     });
     return () => unsubscribe();
   }, [router]);
 
 
   const fetchSharedRoutes = () => {
-    setIsLoading(true);
+    setIsLoading(true); 
     if (typeof window !== 'undefined') {
       const storedRoutesRaw = localStorage.getItem(SHARED_ROUTES_LS_KEY);
       const storedRoutes: Partial<MySharedRoute>[] = storedRoutesRaw ? JSON.parse(storedRoutesRaw) : [];
@@ -113,8 +108,18 @@ export default function MyPage() {
       
       setUserSharedRoutes(mappedRoutes);
     }
-    setIsLoading(false);
+    setIsLoading(false); 
   };
+
+  useEffect(() => {
+    if (user && firebaseUser) { // Ensure firebaseUser is also set before fetching
+        fetchSharedRoutes();
+    } else if (!user) { 
+        setUserSharedRoutes([]);
+        setIsLoading(false); 
+    }
+  }, [user, firebaseUser]);
+
 
   const handleDeleteSharedRoute = () => {
     if (!routeToDelete || typeof window === 'undefined') return;
@@ -139,7 +144,7 @@ export default function MyPage() {
         description: "Could not delete the route. Please try again.",
       });
     } finally {
-      setRouteToDelete(null); // Close dialog
+      setRouteToDelete(null); 
     }
   };
 
@@ -187,8 +192,9 @@ export default function MyPage() {
             )}
           </div>
           <Button variant="outline" size="sm" asChild className="border-primary text-primary hover:bg-primary/10">
-            {/* TODO: Link to actual settings page */}
-            <Link href="#"><Settings className="h-4 w-4 mr-2"/>Edit Profile</Link>
+            <Link href="/my-page/settings"> 
+                <Settings className="h-4 w-4 mr-2"/>Edit Profile
+            </Link>
           </Button>
         </CardHeader>
       </Card>
@@ -224,11 +230,9 @@ export default function MyPage() {
                         <Edit3 className="h-5 w-5 text-muted-foreground hover:text-primary" />
                     </Link>
                   </Button>
-                  <AlertDialogTrigger asChild>
-                     <Button variant="ghost" size="icon" onClick={() => setRouteToDelete(route)} aria-label={`Delete ${route.title}`}>
-                        <Trash2 className="h-5 w-5 text-muted-foreground hover:text-destructive" />
-                    </Button>
-                  </AlertDialogTrigger>
+                  <Button variant="ghost" size="icon" onClick={() => setRouteToDelete(route)} aria-label={`Delete ${route.title}`}>
+                      <Trash2 className="h-5 w-5 text-muted-foreground hover:text-destructive" />
+                  </Button>
                 </div>
               </div>
             )) : (
@@ -301,7 +305,7 @@ export default function MyPage() {
             This section will show your specific comments and ratings across various routes.
           </p>
           <div className="mt-4 p-3 border border-border rounded-lg bg-background">
-            <p className="text-sm text-foreground">On <Link href="/route/tr1" className="font-medium text-primary hover:underline">Ancient Temple Trail</Link>:</p>
+            <p className="text-sm text-foreground">On <Link href="/route/mock-1" className="font-medium text-primary hover:underline">Ancient Temple Trail</Link>:</p>
             <div className="flex items-center my-1">
                 {[...Array(5)].map((_, i) => (
                   <Star key={i} className={`h-4 w-4 ${i < 5 ? 'text-accent fill-accent' : 'text-muted-foreground/50'}`} />
@@ -312,7 +316,7 @@ export default function MyPage() {
         </CardContent>
       </Card>
 
-      <AlertDialog open={!!routeToDelete} onOpenChange={(isOpen) => !isOpen && setRouteToDelete(null)}>
+      <AlertDialog open={!!routeToDelete} onOpenChange={(isOpen) => { if (!isOpen) setRouteToDelete(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure you want to delete this route?</AlertDialogTitle>
@@ -334,3 +338,6 @@ export default function MyPage() {
     </div>
   );
 }
+
+
+    
