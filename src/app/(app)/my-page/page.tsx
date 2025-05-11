@@ -4,21 +4,21 @@ import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ListChecks, Route, MessageSquare, Star, Award, Edit3, Gift, Settings, Loader2 } from "lucide-react";
+import { ListChecks, Route, MessageSquare, Star, Award, Edit3, Gift, Settings, Loader2, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 
-// Consistent Route structure (subset of DiscoverRoute for simplicity here if needed)
+// Consistent Route structure
 interface MySharedRoute {
   id: string;
   title: string;
-  description?: string; // Optional for My Page display
+  description?: string; 
   imageUrl: string;
   imageHint: string;
-  // Add other fields if needed for My Page display, like status, views, rating (will be placeholders for localStorage items)
   status?: "Published" | "Draft" | "Shared (Local)";
   views?: number;
   rating?: number | null;
+  googleMapsLink?: string; // Added for Google Maps link
 }
 
 const SHARED_ROUTES_LS_KEY = 'userSharedRoutes';
@@ -51,19 +51,37 @@ export default function MyPage() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const storedRoutesRaw = localStorage.getItem(SHARED_ROUTES_LS_KEY);
-      const storedRoutes: MySharedRoute[] = storedRoutesRaw ? JSON.parse(storedRoutesRaw) : [];
-      // Adapt stored routes to MySharedRoute structure if necessary, or ensure create page saves compatible structure
-      // For now, we assume stored routes have compatible `id`, `title`, `imageUrl`, `imageHint`
-      // We'll add a default status for these.
+      // Ensure storedRoutes are parsed as an array of MySharedRoute compatible objects
+      const storedRoutes: Partial<MySharedRoute>[] = storedRoutesRaw ? JSON.parse(storedRoutesRaw) : [];
+      
       setUserSharedRoutes(storedRoutes.map(route => ({
-        ...route,
-        status: "Shared (Local)", // Indicate it's from local storage
+        id: route.id || `fallback_id_${Math.random()}`, // provide fallback id
+        title: route.title || "Untitled Route", // provide fallback title
+        imageUrl: route.imageUrl || "https://picsum.photos/seed/default/100/66", // provide fallback image
+        imageHint: route.imageHint || "route image",
+        googleMapsLink: route.googleMapsLink,
+        status: "Shared (Local)", 
         views: route.views || 0,
         rating: route.rating === undefined ? null : route.rating,
+        description: route.description || "",
       })));
     }
     setIsLoadingSharedRoutes(false);
   }, []);
+
+  const RouteItemContent = ({ route }: { route: MySharedRoute }) => (
+    <>
+      <Image src={route.imageUrl} alt={route.title} width={100} height={66} className="rounded-md object-cover" data-ai-hint={route.imageHint || "route image"} />
+      <div className="flex-grow">
+        <h3 className="font-semibold text-foreground">{route.title}</h3>
+        <p className={`text-xs ${route.status === 'Published' ? 'text-green-600' : route.status === 'Shared (Local)' ? 'text-blue-600' : 'text-amber-600'}`}>{route.status || "Status N/A"}</p>
+        <p className="text-xs text-muted-foreground">
+          {route.views !== undefined ? `${route.views} views` : ""} 
+          {route.rating !== undefined && route.rating !== null ? ` • ${route.rating} ★` : (route.views !== undefined ? "" : "No stats yet")}
+        </p>
+      </div>
+    </>
+  );
 
   return (
     <div className="space-y-8">
@@ -94,7 +112,7 @@ export default function MyPage() {
         <Card className="lg:col-span-2 rounded-xl shadow-md">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-xl"><Route className="h-6 w-6 text-primary" />My Shared Routes</CardTitle>
-            <CardDescription>Manage routes you've created and shared. Local changes are reflected here.</CardDescription>
+            <CardDescription>Manage routes you've created and shared. Click a route to view its map (if available) or edit its details.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {isLoadingSharedRoutes ? (
@@ -102,18 +120,31 @@ export default function MyPage() {
                 <Loader2 className="h-6 w-6 animate-spin text-primary mr-2"/> Loading your shared routes...
               </div>
             ) : userSharedRoutes.length > 0 ? userSharedRoutes.map(route => (
-              <div key={route.id} className="flex items-center gap-4 p-3 border border-border rounded-lg hover:bg-muted/20 transition-colors">
-                <Image src={route.imageUrl} alt={route.title} width={100} height={66} className="rounded-md object-cover" data-ai-hint={route.imageHint || "route image"} />
-                <div className="flex-grow">
-                  <h3 className="font-semibold text-foreground">{route.title}</h3>
-                  <p className={`text-xs ${route.status === 'Published' ? 'text-green-600' : route.status === 'Shared (Local)' ? 'text-blue-600' : 'text-amber-600'}`}>{route.status || "Status N/A"}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {route.views !== undefined ? `${route.views} views` : ""} 
-                    {route.rating !== undefined && route.rating !== null ? ` • ${route.rating} ★` : (route.views !== undefined ? "" : "No stats yet")}
-                  </p>
-                </div>
-                {/* Edit functionality for local routes might not be applicable or would need careful implementation */}
-                 <Button variant="ghost" size="icon" asChild><Link href={`/route/${route.id}`}><Edit3 className="h-5 w-5 text-muted-foreground hover:text-primary" /></Link></Button>
+              <div key={route.id} className="flex items-center justify-between gap-4 p-3 border border-border rounded-lg hover:bg-muted/20 transition-colors">
+                {route.googleMapsLink ? (
+                  <a 
+                    href={route.googleMapsLink} 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="flex items-center gap-4 flex-grow no-underline text-current cursor-pointer"
+                    aria-label={`View ${route.title} on Google Maps`}
+                  >
+                    <RouteItemContent route={route} />
+                  </a>
+                ) : (
+                  // If no Google Maps link, clicking the item could link to internal page, or be non-interactive
+                  // For now, let's make it link to the internal route page as well.
+                  <Link href={`/route/${route.id}`} passHref legacyBehavior>
+                    <a className="flex items-center gap-4 flex-grow no-underline text-current cursor-pointer" aria-label={`View details for ${route.title}`}>
+                       <RouteItemContent route={route} />
+                    </a>
+                  </Link>
+                )}
+                 <Button variant="ghost" size="icon" asChild TooltipContent="Edit route details">
+                    <Link href={`/route/${route.id}`} aria-label={`Edit details for ${route.title}`}>
+                        <Edit3 className="h-5 w-5 text-muted-foreground hover:text-primary" />
+                    </Link>
+                 </Button>
               </div>
             )) : (
               <p className="text-muted-foreground text-sm">You haven't shared any routes yet. <Link href="/create" className="text-primary hover:underline font-medium">Share your first route!</Link></p>
