@@ -1,11 +1,29 @@
+"use client";
+
+import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ListChecks, Route, MessageSquare, Star, Award, Edit3, Gift, Settings } from "lucide-react";
+import { ListChecks, Route, MessageSquare, Star, Award, Edit3, Gift, Settings, Loader2 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 
-// Mock data for My Page
+// Consistent Route structure (subset of DiscoverRoute for simplicity here if needed)
+interface MySharedRoute {
+  id: string;
+  title: string;
+  description?: string; // Optional for My Page display
+  imageUrl: string;
+  imageHint: string;
+  // Add other fields if needed for My Page display, like status, views, rating (will be placeholders for localStorage items)
+  status?: "Published" | "Draft" | "Shared (Local)";
+  views?: number;
+  rating?: number | null;
+}
+
+const SHARED_ROUTES_LS_KEY = 'userSharedRoutes';
+
+// Mock data for user, traveled routes, and rewards (these are not affected by localStorage shared routes)
 const mockUser = {
   name: "Alex Wanderer",
   email: "alex.wanderer@example.com",
@@ -15,11 +33,6 @@ const mockUser = {
   isCulturalUser: true,
   culturalInterest: "Traditional Pottery & Local Crafts",
 };
-
-const mockSharedRoutes = [
-  { id: "sr1", title: "Hidden Gems of Kyoto", status: "Published", views: 1250, rating: 4.7, imageUrl: "https://picsum.photos/seed/kyoto_shared/300/200", imageHint: "Kyoto street" },
-  { id: "sr2", title: "Artisan Trail: Downtown", status: "Draft", views: 0, rating: null, imageUrl: "https://picsum.photos/seed/artisan_shared/300/200", imageHint: "artisan shop" },
-];
 
 const mockTraveledRoutes = [
   { id: "tr1", title: "Ancient Temple Trail", completedDate: "2024-05-10", myRating: 5, imageUrl: "https://picsum.photos/seed/temple_traveled/300/200", imageHint: "temple detail" },
@@ -32,6 +45,26 @@ const mockRewards = [
 
 
 export default function MyPage() {
+  const [userSharedRoutes, setUserSharedRoutes] = useState<MySharedRoute[]>([]);
+  const [isLoadingSharedRoutes, setIsLoadingSharedRoutes] = useState(true);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const storedRoutesRaw = localStorage.getItem(SHARED_ROUTES_LS_KEY);
+      const storedRoutes: MySharedRoute[] = storedRoutesRaw ? JSON.parse(storedRoutesRaw) : [];
+      // Adapt stored routes to MySharedRoute structure if necessary, or ensure create page saves compatible structure
+      // For now, we assume stored routes have compatible `id`, `title`, `imageUrl`, `imageHint`
+      // We'll add a default status for these.
+      setUserSharedRoutes(storedRoutes.map(route => ({
+        ...route,
+        status: "Shared (Local)", // Indicate it's from local storage
+        views: route.views || 0,
+        rating: route.rating === undefined ? null : route.rating,
+      })));
+    }
+    setIsLoadingSharedRoutes(false);
+  }, []);
+
   return (
     <div className="space-y-8">
       <Card className="overflow-hidden rounded-xl shadow-lg">
@@ -61,24 +94,32 @@ export default function MyPage() {
         <Card className="lg:col-span-2 rounded-xl shadow-md">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-xl"><Route className="h-6 w-6 text-primary" />My Shared Routes</CardTitle>
-            <CardDescription>Manage routes you've created and shared with the community.</CardDescription>
+            <CardDescription>Manage routes you've created and shared. Local changes are reflected here.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {mockSharedRoutes.length > 0 ? mockSharedRoutes.map(route => (
+            {isLoadingSharedRoutes ? (
+              <div className="flex items-center justify-center p-4">
+                <Loader2 className="h-6 w-6 animate-spin text-primary mr-2"/> Loading your shared routes...
+              </div>
+            ) : userSharedRoutes.length > 0 ? userSharedRoutes.map(route => (
               <div key={route.id} className="flex items-center gap-4 p-3 border border-border rounded-lg hover:bg-muted/20 transition-colors">
-                <Image src={route.imageUrl} alt={route.title} width={100} height={66} className="rounded-md object-cover" data-ai-hint={route.imageHint} />
+                <Image src={route.imageUrl} alt={route.title} width={100} height={66} className="rounded-md object-cover" data-ai-hint={route.imageHint || "route image"} />
                 <div className="flex-grow">
                   <h3 className="font-semibold text-foreground">{route.title}</h3>
-                  <p className={`text-xs ${route.status === 'Published' ? 'text-green-600' : 'text-amber-600'}`}>{route.status}</p>
-                  <p className="text-xs text-muted-foreground">{route.views} views {route.rating && `• ${route.rating} ★`}</p>
+                  <p className={`text-xs ${route.status === 'Published' ? 'text-green-600' : route.status === 'Shared (Local)' ? 'text-blue-600' : 'text-amber-600'}`}>{route.status || "Status N/A"}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {route.views !== undefined ? `${route.views} views` : ""} 
+                    {route.rating !== undefined && route.rating !== null ? ` • ${route.rating} ★` : (route.views !== undefined ? "" : "No stats yet")}
+                  </p>
                 </div>
-                <Button variant="ghost" size="icon" asChild><Link href={`/route/${route.id}/edit`}><Edit3 className="h-5 w-5 text-muted-foreground hover:text-primary" /></Link></Button>
+                {/* Edit functionality for local routes might not be applicable or would need careful implementation */}
+                 <Button variant="ghost" size="icon" asChild><Link href={`/route/${route.id}`}><Edit3 className="h-5 w-5 text-muted-foreground hover:text-primary" /></Link></Button>
               </div>
             )) : (
               <p className="text-muted-foreground text-sm">You haven't shared any routes yet. <Link href="/create" className="text-primary hover:underline font-medium">Share your first route!</Link></p>
             )}
              <Button variant="outline" asChild className="mt-4 border-primary text-primary hover:bg-primary/10 w-full sm:w-auto">
-                <Link href="/create"><Route className="h-4 w-4 mr-2"/>Share a New Route</Link>
+                <Link href="/create"><Route className="h-4 w-4 mr-2"/>Share or Create a New Route</Link>
              </Button>
           </CardContent>
         </Card>

@@ -1,16 +1,37 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, type FormEvent, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Share2, Route, Info, CheckCircle, AlertTriangle, ExternalLink, Map } from "lucide-react";
+import { Share2, Route, Info, ExternalLink, Map } from "lucide-react";
 import Image from "next/image";
 import { Checkbox } from '@/components/ui/checkbox';
+import { useToast } from '@/hooks/use-toast';
 
 type CreateMode = 'options' | 'share' | 'new';
+
+// Define a structure for the routes consistent with DiscoverPage
+interface SharedRoute {
+  id: string;
+  title: string;
+  description: string;
+  imageUrl: string;
+  imageHint: string;
+  tags: string[];
+  rating: number | null;
+  reviews: number;
+  duration: string;
+  creator: string;
+  isCulturalRoute: boolean;
+  startPoint: string;
+  googleMapsLink?: string;
+  // mapPosition?: { top: string; left: string }; // mapPosition is hard to generate client-side
+}
+
+const SHARED_ROUTES_LS_KEY = 'userSharedRoutes';
 
 export default function CreatePage() {
   const [mode, setMode] = useState<CreateMode>('options');
@@ -19,10 +40,51 @@ export default function CreatePage() {
   const [routeName, setRouteName] = useState('');
   const [routeDescription, setRouteDescription] = useState('');
   const [isCulturalRoute, setIsCulturalRoute] = useState(false);
+  const { toast } = useToast();
+
+  // Effect to clear form state when mode changes back to options
+  useEffect(() => {
+    if (mode === 'options') {
+      setGoogleMapsLink('');
+      setRoutePreview(null);
+      setRouteName('');
+      setRouteDescription('');
+      setIsCulturalRoute(false);
+    }
+  }, [mode]);
+
+
+  const addRouteToLocalStorage = (newRoute: SharedRoute) => {
+    if (typeof window !== 'undefined') {
+      try {
+        const existingRoutesRaw = localStorage.getItem(SHARED_ROUTES_LS_KEY);
+        const existingRoutes: SharedRoute[] = existingRoutesRaw ? JSON.parse(existingRoutesRaw) : [];
+        // Avoid adding duplicates by title, simplistic check
+        if (existingRoutes.some(r => r.title === newRoute.title)) {
+            toast({
+                variant: "destructive",
+                title: "Route already shared",
+                description: "A route with this title has already been shared locally.",
+            });
+            return false;
+        }
+        localStorage.setItem(SHARED_ROUTES_LS_KEY, JSON.stringify([...existingRoutes, newRoute]));
+        return true;
+      } catch (error) {
+        console.error("Error saving route to localStorage:", error);
+        toast({
+          variant: "destructive",
+          title: "Storage Error",
+          description: "Could not save the route locally.",
+        });
+        return false;
+      }
+    }
+    return false;
+  };
 
   const handleLinkPaste = (e: React.ChangeEvent<HTMLInputElement>) => {
     setGoogleMapsLink(e.target.value);
-    // Simulate preview generation
     if (e.target.value.startsWith("https://maps.google.com/") || e.target.value.startsWith("https://www.google.com/maps/")) {
       setRoutePreview(`https://picsum.photos/seed/${encodeURIComponent(e.target.value)}/600/300`);
     } else {
@@ -32,25 +94,55 @@ export default function CreatePage() {
 
   const handleSubmitSharedRoute = (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Implement actual route sharing logic
-    console.log("Sharing route:", { googleMapsLink, routeName, routeDescription, isCulturalRoute });
-    alert("Route shared successfully (simulated)!");
-    setMode('options');
-    setGoogleMapsLink('');
-    setRoutePreview(null);
-    setRouteName('');
-    setRouteDescription('');
-    setIsCulturalRoute(false);
+    const newRoute: SharedRoute = {
+      id: `user_shared_${Date.now()}`,
+      title: routeName,
+      description: routeDescription,
+      imageUrl: routePreview || `https://picsum.photos/seed/${encodeURIComponent(routeName)}/600/400`,
+      imageHint: "shared map route",
+      tags: isCulturalRoute ? ["Cultural", "Shared Map"] : ["Shared Map"],
+      rating: null,
+      reviews: 0,
+      duration: "Varies",
+      creator: "You (Shared)",
+      isCulturalRoute,
+      startPoint: "From Google Maps",
+      googleMapsLink: googleMapsLink,
+    };
+    
+    if(addRouteToLocalStorage(newRoute)) {
+        toast({
+            title: "Route Shared!",
+            description: `${routeName} has been added to your local shared routes.`,
+        });
+        setMode('options');
+    }
   };
   
-  const handleCreateNewRoute = () => {
-    // TODO: Implement route creation logic
-    console.log("Creating new route:", { routeName, routeDescription, isCulturalRoute });
-    alert("New route created successfully (simulated)!");
-    setMode('options');
-    setRouteName('');
-    setRouteDescription('');
-    setIsCulturalRoute(false);
+  const handleCreateNewRoute = (e: React.FormEvent) => {
+    e.preventDefault();
+     const newRoute: SharedRoute = {
+      id: `user_created_${Date.now()}`,
+      title: routeName,
+      description: routeDescription,
+      imageUrl: `https://picsum.photos/seed/${encodeURIComponent(routeName)}/600/400`,
+      imageHint: "custom community route",
+      tags: isCulturalRoute ? ["Cultural", "Custom"] : ["Custom"],
+      rating: null,
+      reviews: 0,
+      duration: "User Defined",
+      creator: "You (Created)",
+      isCulturalRoute,
+      startPoint: "User Described",
+    };
+
+    if(addRouteToLocalStorage(newRoute)) {
+        toast({
+            title: "Route Created!",
+            description: `${routeName} has been added to your local routes.`,
+        });
+        setMode('options');
+    }
   };
 
   if (mode === 'options') {
@@ -214,8 +306,7 @@ export default function CreatePage() {
             </div>
 
             <p className="text-muted-foreground pt-4">
-              Alternatively, you can describe your route below, and our community or AI tools may help refine it later. 
-              However, providing a Google Maps link is the preferred method for accuracy.
+              Alternatively, you can describe your route below. Providing a Google Maps link is preferred for accuracy if possible.
             </p>
             
             <form onSubmit={handleCreateNewRoute} className="space-y-6 pt-4 border-t border-border">
@@ -262,4 +353,3 @@ export default function CreatePage() {
 
   return null; // Should not happen
 }
-
