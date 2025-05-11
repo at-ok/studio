@@ -60,7 +60,6 @@ const mockRewards = [
 export default function MyPage() {
   const [userSharedRoutes, setUserSharedRoutes] = useState<MySharedRoute[]>([]);
   const [isLoadingSharedRoutes, setIsLoadingSharedRoutes] = useState(true);
-  const [routeToDelete, setRouteToDelete] = useState<MySharedRoute | null>(null);
   const { toast } = useToast();
 
   const fetchSharedRoutes = () => {
@@ -119,7 +118,6 @@ export default function MyPage() {
         });
       }
     }
-    setRouteToDelete(null); // Close dialog
   };
 
 
@@ -192,11 +190,30 @@ export default function MyPage() {
                         <Edit3 className="h-5 w-5 text-muted-foreground hover:text-primary" />
                     </Link>
                   </Button>
-                  <AlertDialogTrigger asChild>
-                     <Button variant="ghost" size="icon" onClick={() => setRouteToDelete(route)} aria-label={`Delete ${route.title}`}>
-                        <Trash2 className="h-5 w-5 text-muted-foreground hover:text-destructive" />
-                    </Button>
-                  </AlertDialogTrigger>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                       <Button variant="ghost" size="icon" aria-label={`Delete ${route.title}`}>
+                          <Trash2 className="h-5 w-5 text-muted-foreground hover:text-destructive" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Are you sure you want to delete this route?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This action cannot be undone. This will permanently delete the route titled "{route.title}" from your shared routes.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => handleDeleteSharedRoute(route.id)}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          Delete
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
               </div>
             )) : (
@@ -284,28 +301,6 @@ export default function MyPage() {
           </div>
         </CardContent>
       </Card>
-
-      {/* Alert Dialog for Delete Confirmation */}
-      <AlertDialog open={!!routeToDelete} onOpenChange={(open) => !open && setRouteToDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure you want to delete this route?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the route titled "{routeToDelete?.title}" from your shared routes.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setRouteToDelete(null)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => routeToDelete && handleDeleteSharedRoute(routeToDelete.id)}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
-
