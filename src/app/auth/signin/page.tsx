@@ -9,8 +9,8 @@ import { Label } from "@/components/ui/label";
 import { LogIn, Mail, KeyRound } from "lucide-react";
 import { Logo } from "@/components/common/logo";
 
-import { getAuth, GoogleAuthProvider, signInWithPopup, getAdditionalUserInfo } from "firebase/auth";
-import { getFirestore, doc, setDoc }  from "firebase/firestore";
+import { getAuth, GoogleAuthProvider, signInWithPopup, getAdditionalUserInfo, signInWithEmailAndPassword } from "firebase/auth";
+import { getFirestore, doc, setDoc, getDoc }  from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 // import { app as firebaseApp } from '@/lib/firebase'; // Not strictly needed if using getAuth() without args and firebase is initialized
@@ -30,14 +30,52 @@ export default function SignInPage() {
   const router = useRouter();
   const { toast } = useToast();
 
-  const handleSignIn = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSignIn = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    // TODO: Implement Firebase email/password sign in
-    toast({
-        variant: "default", // Or another appropriate variant
-        title: "Sign In (Email/Password)",
-        description: "Email/Password sign-in functionality is not yet implemented.",
-    });
+    const formData = new FormData(event.currentTarget);
+    const email = formData.get("email") as string;
+    const password = formData.get("password") as string;
+
+    const auth = getAuth();
+    const db = getFirestore();
+
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      // Update last login time in Firestore
+      await setDoc(doc(db, "users", user.uid), {
+        lastLoginAt: new Date().toISOString(),
+      }, { merge: true });
+      
+      toast({
+        title: "Signed In Successfully!",
+        description: `Welcome back, ${user.displayName || 'User'}!`,
+      });
+      router.push('/my-page');
+    } catch (error: any) {
+      console.error("Email/Password Sign-In Error:", error);
+      let errorMessage = "An unexpected error occurred during sign-in.";
+      switch (error.code) {
+        case 'auth/user-not-found':
+        case 'auth/wrong-password':
+          errorMessage = "Invalid email or password. Please try again.";
+          break;
+        case 'auth/invalid-email':
+          errorMessage = "The email address is not valid.";
+          break;
+        case 'auth/user-disabled':
+          errorMessage = "This account has been disabled.";
+          break;
+        default:
+          errorMessage = error.message || errorMessage;
+      }
+      toast({
+        variant: "destructive",
+        title: "Sign In Failed",
+        description: errorMessage,
+      });
+    }
   };
 
   const handleGoogleSignIn = async () => {
@@ -50,7 +88,9 @@ export default function SignInPage() {
       const user = result.user;
       const additionalUserInfo = getAdditionalUserInfo(result);
       
-      // Prepare user data, conditionally adding fields for new users
+      const userRef = doc(db, "users", user.uid);
+      const userSnap = await getDoc(userRef);
+
       const userDataToSet: any = {
         uid: user.uid,
         displayName: user.displayName,
@@ -59,14 +99,13 @@ export default function SignInPage() {
         lastLoginAt: new Date().toISOString(),
       };
 
-      if (additionalUserInfo?.isNewUser) {
+      if (additionalUserInfo?.isNewUser || !userSnap.exists()) {
         userDataToSet.isCulturalUser = false;
         userDataToSet.culturalInterest = "";
         userDataToSet.createdAt = new Date().toISOString();
       }
       
-      // Store or update user info in Firestore
-      await setDoc(doc(db, "users", user.uid), userDataToSet, { merge: true });
+      await setDoc(userRef, userDataToSet, { merge: true });
 
       toast({
         title: "Signed In Successfully!",
@@ -110,14 +149,14 @@ export default function SignInPage() {
               <Label htmlFor="email">Email</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                <Input id="email" type="email" placeholder="you@example.com" required className="pl-10 py-3"/>
+                <Input id="email" name="email" type="email" placeholder="you@example.com" required className="pl-10 py-3"/>
               </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
                <div className="relative">
                 <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                <Input id="password" type="password" placeholder="••••••••" required className="pl-10 py-3"/>
+                <Input id="password" name="password" type="password" placeholder="••••••••" required className="pl-10 py-3"/>
               </div>
             </div>
             <div className="flex items-center justify-between">
@@ -161,3 +200,4 @@ export default function SignInPage() {
     </div>
   );
 }
+
