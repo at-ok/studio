@@ -322,26 +322,17 @@ export default function RouteDetailPage() {
               // Already an embed link
               embedSrc = route.googleMapsLink;
             } else if (route.googleMapsLink.includes("/maps/")) {
-               // Attempt to construct a basic embed link for general /maps/ links.
-               // This might not work for all types of Google Maps links, especially complex ones.
-               // A more robust solution might involve parsing the URL to extract place IDs or coordinates
-               // and constructing an embed URL using the Google Maps Embed API format.
-               // For simplicity, this basic replacement is a common case.
               const urlParts = route.googleMapsLink.split('/@');
               if (urlParts.length > 1 && urlParts[0].includes('/place/')) {
-                 // Looks like a place URL, try to make an embed link
                  const placeName = urlParts[0].substring(urlParts[0].lastIndexOf('/') + 1);
                  embedSrc = `https://www.google.com/maps/embed/v1/place?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&q=${encodeURIComponent(placeName)}`;
               } else if (urlParts.length > 1) {
-                 // Looks like a coordinate-based URL, try to make an embed link
                  const coordsAndZoom = urlParts[1].split(',');
-                 if (coordsAndZoom.length >= 3) { // lat, lng, zoom
+                 if (coordsAndZoom.length >= 3) { 
                     embedSrc = `https://www.google.com/maps/embed/v1/view?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&center=${coordsAndZoom[0]},${coordsAndZoom[1]}&zoom=${coordsAndZoom[2].replace('z', '')}`;
                  }
               }
-              // If not a known pattern, it might fallback to original or just not embed well.
             }
-
 
             return (
               <div className="my-6">
@@ -381,87 +372,8 @@ export default function RouteDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Route Spots / Itinerary */}
-      {(route.spots && route.spots.length > 0) ? (
-        <Card className="rounded-xl shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-2xl font-semibold text-foreground">Route Itinerary & Spots</CardTitle>
-            <CardDescription>Key points of interest along the trail. Tap a spot to see photos or add your own!</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Conditional Map Placeholder only if googleMapsLink is not present */}
-            {!route.googleMapsLink && (
-                 <div className="bg-muted rounded-lg h-64 flex items-center justify-center text-muted-foreground">
-                    <MapPin className="h-12 w-12 mr-2" /> Interactive Map Placeholder (Spots)
-                </div>
-            )}
-
-            {route.spots.map((spot, index) => (
-              <div key={spot.id} className="p-4 border border-border rounded-lg hover:shadow-md transition-shadow">
-                <h3 className="text-lg font-semibold text-primary flex items-center">
-                  <span className="mr-2 text-accent font-bold">{index + 1}.</span> {spot.name}
-                </h3>
-                <p className="text-sm text-muted-foreground mt-1 mb-3">{spot.description}</p>
-                
-                {spot.photos.length > 0 && (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mb-3">
-                    {spot.photos.map(photo => (
-                       <div key={photo.id} className="relative aspect-square rounded-md overflow-hidden group">
-                          <Image src={photo.url} alt={`${spot.name} photo by ${photo.user}`} layout="fill" objectFit="cover" data-ai-hint={photo.hint}/>
-                          <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-1.5">
-                              <p className="text-white text-xs truncate">By {photo.user}</p>
-                          </div>
-                       </div>
-                    ))}
-                  </div>
-                )}
-                
-                <Button variant="outline" size="sm" onClick={() => setShowPhotoUploadModal(spot.id)}>
-                  <Camera className="h-4 w-4 mr-2" /> {spot.photos.length > 0 ? 'View / Add Photos' : 'Add Your Photo'}
-                </Button>
-
-                {showPhotoUploadModal === spot.id && (
-                  <div className="mt-4 p-4 bg-muted/50 rounded-md">
-                    <Label htmlFor={`photo-upload-${spot.id}`} className="font-semibold mb-2 block">Upload photos for {spot.name}</Label>
-                    <div className="flex items-center gap-2">
-                      <Input 
-                        id={`photo-upload-${spot.id}`} 
-                        type="file" 
-                        multiple 
-                        accept="image/*"
-                        onChange={(e) => handlePhotoUpload(spot.id, e.target.files)}
-                        className="flex-grow file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
-                      />
-                      <Button size="sm" onClick={() => setShowPhotoUploadModal(null)}>Close</Button>
-                    </div>
-                    {uploadedPhotos[spot.id] && (
-                      <div className="mt-2 text-xs text-muted-foreground">
-                        {uploadedPhotos[spot.id]?.length} photo(s) selected.
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      ) : !route.googleMapsLink && ( // Show this card only if no spots AND no googleMapsLink to embed
-        <Card className="rounded-xl shadow-lg">
-            <CardHeader>
-                <CardTitle className="text-2xl font-semibold text-foreground">Route Itinerary & Spots</CardTitle>
-            </CardHeader>
-            <CardContent>
-                <div className="flex items-center gap-2 text-muted-foreground p-4 bg-muted/50 rounded-md">
-                    <Info className="h-5 w-5"/>
-                    <p>No specific spots or map link provided for this route yet. Enjoy the general journey!</p>
-                </div>
-            </CardContent>
-        </Card>
-      )}
-
-
       {/* Feedback & Comments Section */}
-      <Card className="rounded-xl shadow-lg">
+      <Card id="feedback" className="rounded-xl shadow-lg">
         <CardHeader>
           <CardTitle className="text-2xl font-semibold text-foreground">Feedback & Reviews</CardTitle>
         </CardHeader>
@@ -562,7 +474,84 @@ export default function RouteDetailPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Route Spots / Itinerary */}
+      {(route.spots && route.spots.length > 0) ? (
+        <Card className="rounded-xl shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-2xl font-semibold text-foreground">Route Itinerary & Spots</CardTitle>
+            <CardDescription>Key points of interest along the trail. Tap a spot to see photos or add your own!</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Conditional Map Placeholder only if googleMapsLink is not present */}
+            {!route.googleMapsLink && (
+                 <div className="bg-muted rounded-lg h-64 flex items-center justify-center text-muted-foreground">
+                    <MapPin className="h-12 w-12 mr-2" /> Interactive Map Placeholder (Spots)
+                </div>
+            )}
+
+            {route.spots.map((spot, index) => (
+              <div key={spot.id} className="p-4 border border-border rounded-lg hover:shadow-md transition-shadow">
+                <h3 className="text-lg font-semibold text-primary flex items-center">
+                  <span className="mr-2 text-accent font-bold">{index + 1}.</span> {spot.name}
+                </h3>
+                <p className="text-sm text-muted-foreground mt-1 mb-3">{spot.description}</p>
+                
+                {spot.photos.length > 0 && (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mb-3">
+                    {spot.photos.map(photo => (
+                       <div key={photo.id} className="relative aspect-square rounded-md overflow-hidden group">
+                          <Image src={photo.url} alt={`${spot.name} photo by ${photo.user}`} layout="fill" objectFit="cover" data-ai-hint={photo.hint}/>
+                          <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-1.5">
+                              <p className="text-white text-xs truncate">By {photo.user}</p>
+                          </div>
+                       </div>
+                    ))}
+                  </div>
+                )}
+                
+                <Button variant="outline" size="sm" onClick={() => setShowPhotoUploadModal(spot.id)}>
+                  <Camera className="h-4 w-4 mr-2" /> {spot.photos.length > 0 ? 'View / Add Photos' : 'Add Your Photo'}
+                </Button>
+
+                {showPhotoUploadModal === spot.id && (
+                  <div className="mt-4 p-4 bg-muted/50 rounded-md">
+                    <Label htmlFor={`photo-upload-${spot.id}`} className="font-semibold mb-2 block">Upload photos for {spot.name}</Label>
+                    <div className="flex items-center gap-2">
+                      <Input 
+                        id={`photo-upload-${spot.id}`} 
+                        type="file" 
+                        multiple 
+                        accept="image/*"
+                        onChange={(e) => handlePhotoUpload(spot.id, e.target.files)}
+                        className="flex-grow file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                      />
+                      <Button size="sm" onClick={() => setShowPhotoUploadModal(null)}>Close</Button>
+                    </div>
+                    {uploadedPhotos[spot.id] && (
+                      <div className="mt-2 text-xs text-muted-foreground">
+                        {uploadedPhotos[spot.id]?.length} photo(s) selected.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ) : !route.googleMapsLink && ( 
+        <Card className="rounded-xl shadow-lg">
+            <CardHeader>
+                <CardTitle className="text-2xl font-semibold text-foreground">Route Itinerary & Spots</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <div className="flex items-center gap-2 text-muted-foreground p-4 bg-muted/50 rounded-md">
+                    <Info className="h-5 w-5"/>
+                    <p>No specific spots or map link provided for this route yet. Enjoy the general journey!</p>
+                </div>
+            </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
-
