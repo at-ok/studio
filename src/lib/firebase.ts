@@ -13,7 +13,7 @@ const firebaseConfig = {
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID, // App ID should not have a leading '1:' here
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID, // Optional
 };
 
@@ -25,7 +25,9 @@ if (!getApps().length) {
   app = getApp();
 }
 
+// Get Auth and Firestore instances
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+// Export the instances
 export { app, auth, db };

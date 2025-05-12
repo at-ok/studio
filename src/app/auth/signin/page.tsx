@@ -15,7 +15,7 @@ import { getFirestore, doc, setDoc, getDoc }  from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
-// import { app as firebaseApp } from '@/lib/firebase'; // Not strictly needed if using getAuth() without args and firebase is initialized
+import { auth as firebaseAuth, db as firestoreDb } from "@/lib/firebase"; // Import auth and db from firebase config
 
 // Google Icon SVG as a component
 const GoogleIcon = () => (
@@ -40,18 +40,20 @@ export default function SignInPage() {
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
 
-    const auth = getAuth();
-    const db = getFirestore();
+    if (!email || !password) {
+      setSignInError("Please enter both email and password.");
+      return;
+    }
 
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(firebaseAuth, email, password);
       const user = userCredential.user;
 
       // Update last login time in Firestore
-      await setDoc(doc(db, "users", user.uid), {
+      await setDoc(doc(firestoreDb, "users", user.uid), {
         lastLoginAt: new Date().toISOString(),
       }, { merge: true });
-      
+
       toast({
         title: "Signed In Successfully!",
         description: `Welcome back, ${user.displayName || 'User'}!`,
@@ -79,26 +81,24 @@ export default function SignInPage() {
           errorMessage = error.message || errorMessage;
       }
       setSignInError(errorMessage);
-      toast({
-        variant: "destructive",
-        title: "Sign In Failed",
-        description: errorMessage,
-      });
+      // toast({ // Toast is already displayed in the error handler above
+      //   variant: "destructive",
+      //   title: "Sign In Failed",
+      //   description: errorMessage,
+      // });
     }
   };
 
   const handleGoogleSignIn = async () => {
     setSignInError(null); // Clear previous errors
-    const auth = getAuth();
     const provider = new GoogleAuthProvider();
-    const db = getFirestore();
 
     try {
-      const result = await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(firebaseAuth, provider);
       const user = result.user;
       const additionalUserInfo = getAdditionalUserInfo(result);
-      
-      const userRef = doc(db, "users", user.uid);
+
+      const userRef = doc(firestoreDb, "users", user.uid);
       const userSnap = await getDoc(userRef);
 
       const userDataToSet: any = {
@@ -114,7 +114,7 @@ export default function SignInPage() {
         userDataToSet.culturalInterest = "";
         userDataToSet.createdAt = new Date().toISOString();
       }
-      
+
       await setDoc(userRef, userDataToSet, { merge: true });
 
       toast({
@@ -131,16 +131,18 @@ export default function SignInPage() {
         errorMessage = "Sign-in popup was closed. Please try again.";
       } else if (error.code === 'auth/network-request-failed') {
         errorMessage = "Network error. Please check your connection and try again.";
+      } else if (error.code === 'auth/api-key-not-valid' || error.message.includes('api-key-not-valid')) {
+          errorMessage = "Invalid API Key. Please check your Firebase configuration.";
       }
       else {
         errorMessage = error.message || errorMessage;
       }
       setSignInError(errorMessage);
-      toast({
-        variant: "destructive",
-        title: "Google Sign-In Failed",
-        description: errorMessage,
-      });
+      // toast({ // Toast is already displayed in the error handler above
+      //   variant: "destructive",
+      //   title: "Google Sign-In Failed",
+      //   description: errorMessage,
+      // });
     }
   };
 
@@ -218,4 +220,3 @@ export default function SignInPage() {
     </div>
   );
 }
-
