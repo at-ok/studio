@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from "next/link";
@@ -11,7 +10,7 @@ import { Logo } from "@/components/common/logo";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 import { GoogleAuthProvider, signInWithPopup, getAdditionalUserInfo, signInWithEmailAndPassword } from "firebase/auth";
-import { getFirestore, doc, setDoc, getDoc }  from "firebase/firestore";
+import { getFirestore, doc, setDoc, getDoc, FirestoreError }  from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
@@ -50,14 +49,35 @@ export default function SignInPage() {
       return;
     }
 
+    let userCredential;
     try {
-      const userCredential = await signInWithEmailAndPassword(firebaseAuth, email, password);
+      userCredential = await signInWithEmailAndPassword(firebaseAuth, email, password);
       const user = userCredential.user;
 
       // Optionally update last login time in Firestore
-      await setDoc(doc(firestoreDb, "users", user.uid), {
-        lastLoginAt: new Date().toISOString(),
-      }, { merge: true });
+      try {
+        await setDoc(doc(firestoreDb, "users", user.uid), {
+          lastLoginAt: new Date().toISOString(),
+        }, { merge: true });
+      } catch (firestoreError: any) {
+          console.warn("Firestore update failed after email sign-in:", firestoreError);
+          // Non-critical error, proceed with login but maybe log it
+          // Don't block login for this, but inform the user if it's a permissions issue
+          if (firestoreError.code === 'permission-denied') {
+              toast({
+                  variant: "default", // Not destructive, just info
+                  title: "Signed In (with warning)",
+                  description: "Could not update your last login time. Check Firestore rules if this persists.",
+              });
+          } else if (firestoreError.message?.includes('offline')) {
+              // This case is handled more generically below, but could be specific here too
+              toast({
+                  variant: "default",
+                  title: "Signed In (network issue)",
+                  description: "Could not update last login time due to network issues.",
+              });
+          }
+      }
 
       toast({
         title: "Signed In Successfully!",
@@ -67,23 +87,27 @@ export default function SignInPage() {
     } catch (error: any) {
       console.error("Email/Password Sign-In Error:", error);
       let errorMessage = "An unexpected error occurred during sign-in.";
-      switch (error.code) {
-        case 'auth/user-not-found':
-        case 'auth/invalid-credential':
-        case 'auth/wrong-password':
-          errorMessage = "Invalid email or password. Please try again.";
-          break;
-        case 'auth/invalid-email':
-          errorMessage = "The email address is not valid.";
-          break;
-        case 'auth/user-disabled':
-          errorMessage = "This account has been disabled.";
-          break;
-        case 'auth/too-many-requests':
-          errorMessage = "Too many attempts. Please try again later.";
-          break;
-        default:
-          errorMessage = error.message || errorMessage;
+      if (error instanceof FirestoreError && error.message?.includes('offline')) {
+        errorMessage = "Sign-in successful, but failed to update profile data. Please check your network connection.";
+      } else {
+        switch (error.code) {
+          case 'auth/user-not-found':
+          case 'auth/invalid-credential':
+          case 'auth/wrong-password':
+            errorMessage = "Invalid email or password. Please try again.";
+            break;
+          case 'auth/invalid-email':
+            errorMessage = "The email address is not valid.";
+            break;
+          case 'auth/user-disabled':
+            errorMessage = "This account has been disabled.";
+            break;
+          case 'auth/too-many-requests':
+            errorMessage = "Too many attempts. Please try again later.";
+            break;
+          default:
+            errorMessage = error.message || errorMessage;
+        }
       }
       setSignInError(errorMessage);
        toast({ // Also show error in toast
@@ -108,36 +132,73 @@ export default function SignInPage() {
       const additionalUserInfo = getAdditionalUserInfo(result);
 
       const userRef = doc(firestoreDb, "users", user.uid);
-      const userSnap = await getDoc(userRef);
+      let userSnap;
+      let userDataToSet: any = {
+          uid: user.uid,
+          displayName: user.displayName,
+          email: user.email,
+          photoURL: user.photoURL,
+          lastLoginAt: new Date().toISOString(),
+        };
 
-      const userDataToSet: any = {
-        uid: user.uid,
-        displayName: user.displayName,
-        email: user.email,
-        photoURL: user.photoURL,
-        lastLoginAt: new Date().toISOString(),
-      };
+      try {
+          userSnap = await getDoc(userRef);
 
-      // Set default fields only if it's a new user or the document doesn't exist
-      if (additionalUserInfo?.isNewUser || !userSnap.exists()) {
-        userDataToSet.isCulturalUser = false;
-        userDataToSet.culturalInterest = "";
-        userDataToSet.createdAt = new Date().toISOString();
+          // Set default fields only if it's a new user or the document doesn't exist
+          if (additionalUserInfo?.isNewUser || !userSnap.exists()) {
+            userDataToSet.isCulturalUser = false;
+            userDataToSet.culturalInterest = "";
+            userDataToSet.createdAt = new Date().toISOString();
+          } else {
+            // Preserve existing fields if user doc exists
+             userDataToSet = {
+                ...userSnap.data(), // Keep existing data
+                ...userDataToSet, // Overwrite with latest login info, displayName, etc.
+            }
+          }
+
+        // Create or update user document in Firestore
+        await setDoc(userRef, userDataToSet, { merge: true });
+
+      } catch (firestoreError: any) {
+        console.error("Firestore operation failed after Google sign-in:", firestoreError);
+         // Handle specific Firestore errors (offline, permissions) non-destructively
+        if (firestoreError.code === 'permission-denied') {
+             toast({
+                variant: "default",
+                title: "Signed In (with warning)",
+                description: "Could not read/update your profile data. Check Firestore rules.",
+            });
+        } else if (firestoreError.message?.includes('offline')) {
+             toast({
+                variant: "default",
+                title: "Signed In (network issue)",
+                description: "Could not update profile data due to network issues.",
+            });
+            // Even with Firestore error, proceed to redirect as auth succeeded
+            router.push('/my-page');
+            setIsGoogleLoading(false);
+            return; // Exit early after redirecting
+        } else {
+            // Throw less critical Firestore errors to be caught by the outer catch block
+            // Only if they are not offline/permission issues, as auth itself succeeded.
+             throw new Error(`Firestore error after Google sign-in: ${firestoreError.message}`);
+        }
       }
 
-      // Create or update user document in Firestore
-      await setDoc(userRef, userDataToSet, { merge: true });
 
       toast({
         title: "Signed In Successfully!",
         description: `Welcome back, ${user.displayName || 'User'}!`,
       });
-      router.push('/my-page'); // Redirect after successful Google sign-in
+      router.push('/my-page'); // Redirect after successful Google sign-in and Firestore update/check
     } catch (error: any) {
-      console.error("Google Sign-In Error:", error);
+      console.error("Google Sign-In Process Error:", error);
       let errorMessage = "An unexpected error occurred during Google Sign-In.";
        // Map common error codes to user-friendly messages
-      if (error.code === 'auth/account-exists-with-different-credential') {
+      if (error instanceof FirestoreError && error.message?.includes('offline')) {
+         errorMessage = "Sign-in successful, but failed to sync profile data. Please check your network connection.";
+      } else if (error.code === 'auth/account-exists-with-different-credential') {
         errorMessage = "An account already exists with this email using a different sign-in method. Try the original method.";
       } else if (error.code === 'auth/popup-closed-by-user') {
         errorMessage = "Sign-in popup was closed. Please try again.";
@@ -145,7 +206,7 @@ export default function SignInPage() {
         errorMessage = "Network error. Please check your connection and try again.";
       } else if (error.code === 'auth/cancelled-popup-request') {
          errorMessage = "Sign-in cancelled. Please try again.";
-      } else if (error.code === 'auth/api-key-not-valid' || error.message.includes('api-key-not-valid')) {
+      } else if (error.code === 'auth/api-key-not-valid' || error.message?.includes('api-key-not-valid')) {
           errorMessage = "Invalid API Key configuration. Please contact support."; // More user-friendly
       } else {
         errorMessage = error.message || errorMessage;
