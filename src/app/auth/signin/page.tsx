@@ -10,7 +10,7 @@ import { LogIn, Mail, KeyRound, AlertTriangle } from "lucide-react";
 import { Logo } from "@/components/common/logo";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-import { getAuth, GoogleAuthProvider, signInWithPopup, getAdditionalUserInfo, signInWithEmailAndPassword } from "firebase/auth";
+import { GoogleAuthProvider, signInWithPopup, getAdditionalUserInfo, signInWithEmailAndPassword } from "firebase/auth";
 import { getFirestore, doc, setDoc, getDoc }  from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
@@ -32,16 +32,19 @@ export default function SignInPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [signInError, setSignInError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleSignIn = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setSignInError(null); // Clear previous errors
+    setSignInError(null); 
+    setIsLoading(true);
     const formData = new FormData(event.currentTarget);
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
 
     if (!email || !password) {
       setSignInError("Please enter both email and password.");
+      setIsLoading(false);
       return;
     }
 
@@ -49,7 +52,6 @@ export default function SignInPage() {
       const userCredential = await signInWithEmailAndPassword(firebaseAuth, email, password);
       const user = userCredential.user;
 
-      // Update last login time in Firestore
       await setDoc(doc(firestoreDb, "users", user.uid), {
         lastLoginAt: new Date().toISOString(),
       }, { merge: true });
@@ -64,7 +66,7 @@ export default function SignInPage() {
       let errorMessage = "An unexpected error occurred during sign-in.";
       switch (error.code) {
         case 'auth/user-not-found':
-        case 'auth/invalid-credential': // More generic error for wrong email/password in newer Firebase SDK versions
+        case 'auth/invalid-credential': 
         case 'auth/wrong-password':
           errorMessage = "Invalid email or password. Please try again.";
           break;
@@ -81,16 +83,14 @@ export default function SignInPage() {
           errorMessage = error.message || errorMessage;
       }
       setSignInError(errorMessage);
-      // toast({ // Toast is already displayed in the error handler above
-      //   variant: "destructive",
-      //   title: "Sign In Failed",
-      //   description: errorMessage,
-      // });
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleGoogleSignIn = async () => {
-    setSignInError(null); // Clear previous errors
+    setSignInError(null);
+    setIsLoading(true);
     const provider = new GoogleAuthProvider();
 
     try {
@@ -138,11 +138,8 @@ export default function SignInPage() {
         errorMessage = error.message || errorMessage;
       }
       setSignInError(errorMessage);
-      // toast({ // Toast is already displayed in the error handler above
-      //   variant: "destructive",
-      //   title: "Google Sign-In Failed",
-      //   description: errorMessage,
-      // });
+    } finally {
+        setIsLoading(false);
     }
   };
 
@@ -169,26 +166,26 @@ export default function SignInPage() {
               <Label htmlFor="email">Email</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                <Input id="email" name="email" type="email" placeholder="you@example.com" required className="pl-10 py-3"/>
+                <Input id="email" name="email" type="email" placeholder="you@example.com" required className="pl-10 py-3" disabled={isLoading}/>
               </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
                <div className="relative">
                 <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                <Input id="password" name="password" type="password" placeholder="••••••••" required className="pl-10 py-3"/>
+                <Input id="password" name="password" type="password" placeholder="••••••••" required className="pl-10 py-3" disabled={isLoading}/>
               </div>
             </div>
             <div className="flex items-center justify-between">
-              {/* <div className="flex items-center space-x-2">
-                <Checkbox id="remember-me" />
-                <Label htmlFor="remember-me" className="text-sm">Remember me</Label>
-              </div> */}
-              <Link href="#" className="text-sm text-primary hover:underline">
+              <Link href="/auth/forgot-password" className="text-sm text-primary hover:underline">
                 Forgot password?
               </Link>
             </div>
-            <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground text-base py-3 flex items-center gap-2">
+            <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground text-base py-3 flex items-center gap-2" disabled={isLoading}>
+              {isLoading && <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>}
               <LogIn className="h-5 w-5" /> Sign In
             </Button>
           </form>
@@ -204,7 +201,11 @@ export default function SignInPage() {
             </div>
           </div>
 
-          <Button variant="outline" className="w-full text-base py-3 flex items-center gap-3 border-border hover:bg-accent/10" onClick={handleGoogleSignIn}>
+          <Button variant="outline" className="w-full text-base py-3 flex items-center gap-3 border-border hover:bg-accent/10" onClick={handleGoogleSignIn} disabled={isLoading}>
+           {isLoading && <svg className="animate-spin -ml-1 mr-3 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>}
             <GoogleIcon />
             Sign in with Google
           </Button>
@@ -220,3 +221,4 @@ export default function SignInPage() {
     </div>
   );
 }
+
