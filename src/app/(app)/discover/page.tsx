@@ -46,9 +46,26 @@ export default function DiscoverPage() {
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
 
+  const initialMapOptions: google.maps.MapOptions = {
+    streetViewControl: false,
+    mapTypeControl: false,
+    fullscreenControl: false,
+    gestureHandling: 'cooperative',
+    // zoomControlOptions will be set in onMapLoad
+  };
 
   const onMapLoad = useCallback((mapInstance: google.maps.Map) => {
     setMap(mapInstance);
+
+    // Set options that depend on window.google being available
+    if (typeof window !== 'undefined' && window.google && window.google.maps && window.google.maps.ControlPosition) {
+      mapInstance.setOptions({
+        zoomControlOptions: {
+          position: window.google.maps.ControlPosition.RIGHT_BOTTOM,
+        },
+      });
+    }
+
     // Get user's current location
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -59,30 +76,27 @@ export default function DiscoverPage() {
           };
           setCurrentLocation(userLocation);
           mapInstance.setCenter(userLocation);
-          mapInstance.setZoom(14); // Zoom in more when current location is available
+          mapInstance.setZoom(14); 
         },
         (error) => {
            console.warn("Geolocation error:", error.message);
-          // Handle error or if user denies location access
-          // Fallback to default center and zoom
           mapInstance.setCenter(defaultCenter);
-          mapInstance.setZoom(12); // Wider zoom for default
+          mapInstance.setZoom(12); 
           setMapError("Could not get current location. Showing default area.");
         },
-        { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 } // Options for geolocation
+        { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 } 
       );
     } else {
-      // Geolocation not supported
       mapInstance.setCenter(defaultCenter);
-      mapInstance.setZoom(12); // Wider zoom for default
+      mapInstance.setZoom(12); 
       console.warn("Geolocation is not supported by this browser. Using default map center.");
       setMapError("Geolocation not supported by this browser.");
     }
-  }, []);
+  }, [setMap, setCurrentLocation, setMapError]); // Dependencies for useCallback
 
   const onMapUnmount = useCallback(() => {
     setMap(null);
-  }, []);
+  }, [setMap]);
 
   // Fetch all routes from Firestore
   useEffect(() => {
@@ -91,13 +105,10 @@ export default function DiscoverPage() {
         setMapError(null); // Reset map error on fetch
         try {
             const routesFromDb = await getAllRoutes();
-             // Map Firestore data to client-side structure
              const clientRoutes = routesFromDb.map(route => ({
                  ...route,
-                  // Convert timestamps if they are strings or Date objects
                  createdAt: typeof route.createdAt === 'string' ? route.createdAt : (route.createdAt as Date)?.toISOString(), 
                  updatedAt: typeof route.updatedAt === 'string' ? route.updatedAt : (route.updatedAt as Date)?.toISOString(),
-                 // Populate creator object for card display consistency
                  creator: {
                       name: route.creatorName || 'Unknown Creator',
                       avatarUrl: route.creatorAvatarUrl,
@@ -106,8 +117,8 @@ export default function DiscoverPage() {
             setAllRoutes(clientRoutes);
         } catch (error: any) {
             console.error("Error fetching routes:", error);
-            setMapError("Could not load routes. Please try again later."); // Use mapError state for feedback
-            setAllRoutes([]); // Clear routes on error
+            setMapError("Could not load routes. Please try again later."); 
+            setAllRoutes([]); 
         } finally {
             setIsLoading(false);
         }
@@ -118,15 +129,14 @@ export default function DiscoverPage() {
   const filteredRoutes = allRoutes.filter(route =>
     route.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     route.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    route.tags?.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase())) || // Check if tags exist
-    route.startPoint?.toLowerCase().includes(searchTerm.toLowerCase()) // Search by start point text
+    route.tags?.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase())) || 
+    route.startPoint?.toLowerCase().includes(searchTerm.toLowerCase()) 
   );
 
   if (isLoading) {
     return <div className="flex items-center justify-center h-[calc(100vh-200px)]"><Loader2 className="h-12 w-12 animate-spin text-primary" /> <p className="ml-2">Loading routes...</p></div>;
   }
 
-  // Ensure the API key is set. If not, display a message or a fallback.
   const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
   return (
@@ -136,7 +146,6 @@ export default function DiscoverPage() {
         <p className="text-muted-foreground">Find your next adventure. Explore routes shared by our community.</p>
       </header>
 
-      {/* Search Bar */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
         <Input
@@ -148,7 +157,6 @@ export default function DiscoverPage() {
         />
       </div>
 
-      {/* Map Section */}
       <section>
         <h2 className="text-2xl font-semibold tracking-tight text-foreground mb-4">Route Starting Points</h2>
         <Card className="rounded-xl shadow-lg overflow-hidden">
@@ -158,28 +166,19 @@ export default function DiscoverPage() {
                 <GoogleMap
                   mapContainerStyle={mapContainerStyle}
                   center={currentLocation || defaultCenter}
-                  zoom={14} // Consistent zoom level
+                  zoom={currentLocation ? 14 : 12} // Use initial zoom level based on current location availability
                   onLoad={onMapLoad}
                   onUnmount={onMapUnmount}
-                  options={{
-                    streetViewControl: false,
-                    mapTypeControl: false,
-                    fullscreenControl: false, // Disable fullscreen
-                    zoomControlOptions: { // Position zoom control
-                         position: google.maps.ControlPosition.RIGHT_BOTTOM,
-                    },
-                     gestureHandling: 'cooperative' // Better for touch devices
-                  }}
+                  options={initialMapOptions}
                 >
-                   {/* Marker for current location */}
                    {currentLocation && (
                      <Marker
                          position={currentLocation}
                          title={"Your Location"}
-                         icon={{ // Custom icon for user location
+                         icon={{ 
                            path: google.maps.SymbolPath.CIRCLE,
                            scale: 8,
-                           fillColor: '#4285F4', // Google blue
+                           fillColor: '#4285F4', 
                            fillOpacity: 1,
                            strokeWeight: 2,
                            strokeColor: 'white',
@@ -187,29 +186,24 @@ export default function DiscoverPage() {
                       />
                    )}
 
-                  {/* Markers for route start points */}
                   {filteredRoutes.map(route => (
-                    // Only render marker if startPointCoords exist
                     route.startPointCoords && (
                       <Marker
                         key={`map-pin-${route.id}`}
                         position={route.startPointCoords}
                         onClick={() => setSelectedRoute(route)}
                         title={route.title}
-                        // Optional: Add a custom icon for routes
-                        // icon={{ url: '/path/to/route-pin-icon.png', scaledSize: new google.maps.Size(30, 30) }}
                       />
                     )
                   ))}
 
-                  {/* InfoWindow for selected route */}
                   {selectedRoute && selectedRoute.startPointCoords && (
                     <InfoWindow
                       position={selectedRoute.startPointCoords}
                       onCloseClick={() => setSelectedRoute(null)}
-                       options={{ pixelOffset: new google.maps.Size(0, -30) }} // Offset slightly above pin
+                       options={{ pixelOffset: new google.maps.Size(0, -30) }} 
                     >
-                      <div className="p-1 max-w-xs"> {/* Limit width */}
+                      <div className="p-1 max-w-xs"> 
                         <h3 className="font-semibold text-foreground mb-1 text-sm">{selectedRoute.title}</h3>
                         <p className="text-xs text-muted-foreground mb-2">Starts at: {selectedRoute.startPoint}</p>
                          {selectedRoute.googleMapsLink && (
@@ -226,7 +220,6 @@ export default function DiscoverPage() {
                 </GoogleMap>
               </LoadScript>
             ) : (
-              // Fallback if API key is missing
               <div className="w-full h-[400px] bg-muted flex flex-col items-center justify-center rounded-lg text-center p-4">
                 <MapPin className="h-10 w-10 text-muted-foreground mb-3" />
                  <p className="font-semibold text-foreground">Map Preview Unavailable</p>
@@ -239,7 +232,6 @@ export default function DiscoverPage() {
         </Card>
       </section>
 
-      {/* Route List Section */}
       <section>
         <h2 className="text-2xl font-semibold tracking-tight text-foreground mb-4">
           {searchTerm ? `Search Results (${filteredRoutes.length})` : `All Routes (${filteredRoutes.length})`}
@@ -255,13 +247,13 @@ export default function DiscoverPage() {
               <CardHeader className="p-0 relative">
                 <Link href={`/route/${route.id}`} aria-label={`View details for ${route.title}`}>
                     <Image
-                    src={route.imageUrl || 'https://picsum.photos/seed/default_route/600/400'} // Fallback image
+                    src={route.imageUrl || 'https://picsum.photos/seed/default_route/600/400'} 
                     alt={route.title}
                     width={600}
                     height={400}
                     className="object-cover w-full h-48 cursor-pointer"
                     data-ai-hint={route.imageHint || "route image"}
-                    unoptimized={route.imageUrl?.includes('picsum.photos')} // Avoid optimizing picsum URLs if used
+                    unoptimized={route.imageUrl?.includes('picsum.photos')} 
                     />
                 </Link>
                 {route.isCulturalRoute && (
@@ -277,7 +269,6 @@ export default function DiscoverPage() {
                 <div className="flex items-center text-sm text-muted-foreground">
                   <Clock className="h-4 w-4 mr-1.5 text-primary flex-shrink-0" /> Approx. {route.duration}
                 </div>
-                 {/* Optional: Display creator */}
                  {route.creator?.name && (
                      <div className="flex items-center text-sm text-muted-foreground mt-1">
                          <Users className="h-4 w-4 mr-1.5 text-primary flex-shrink-0" /> By {route.creator.name}
@@ -289,12 +280,12 @@ export default function DiscoverPage() {
                   ))}
                 </div>
               </CardContent>
-              <CardFooter className="p-6 bg-muted/30 flex justify-between items-center border-t"> {/* Added border-t */}
+              <CardFooter className="p-6 bg-muted/30 flex justify-between items-center border-t"> 
                 <div className="flex items-center">
                    {route.rating !== null && route.rating !== undefined ? (
                     <>
                       <Star className="h-5 w-5 text-accent mr-1" fill="hsl(var(--accent))" />
-                      <span className="font-semibold text-foreground">{route.rating.toFixed(1)}</span> {/* Format rating */}
+                      <span className="font-semibold text-foreground">{route.rating.toFixed(1)}</span> 
                       <span className="text-muted-foreground text-sm ml-1">({route.reviewsCount || 0} reviews)</span>
                     </>
                   ) : (
